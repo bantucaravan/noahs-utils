@@ -34,6 +34,9 @@ def group(grouped_df, idx=None):
     '''
     if idx is None:
         idx = np.random.randint(len(grouped_df))
-        
-    return list(grouped_df)[idx][1]
+    
+    tup = list(grouped_df)[idx]
+    print(tup[0])
+    
+    return tup[1]
 
