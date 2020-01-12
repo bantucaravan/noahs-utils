@@ -22,7 +22,7 @@ def allcolsrows(df):
 allrowscols = allcolsrows
 
 def fullcolwidth(df):
-    with pd.option_context('display.max_colwidth', None):#len(df)):
+    with pd.option_context('display.max_colwidth', -1):#len(df)): # None did not work
         display(df)
         
 def group(grouped_df, idx=None):
