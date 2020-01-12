@@ -19,8 +19,11 @@ def allcolsrows(df):
     with pd.option_context('display.max_columns', df.shape[-1], 'display.max_rows', df.shape[0]):
         display(df)
 
+allrowscols = allcolsrows
 
-
+fullcolwidth(df):
+    with pd.option_context('display.max_colwidth', None):#len(df)):
+        display(df)
         
 def group(grouped_df, idx=None):
     '''
