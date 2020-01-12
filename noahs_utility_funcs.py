@@ -21,7 +21,7 @@ def allcolsrows(df):
 
 allrowscols = allcolsrows
 
-fullcolwidth(df):
+def fullcolwidth(df):
     with pd.option_context('display.max_colwidth', None):#len(df)):
         display(df)
         
