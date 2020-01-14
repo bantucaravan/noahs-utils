@@ -43,3 +43,9 @@ def group(grouped_df, idx=None):
     
     return tup[1]
 
+
+sort_val(dicti, reverse=True):
+    assert isinstance(dicti, dict)
+    out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1])}
+    return out
+
