@@ -25,7 +25,7 @@ def fullcolwidth(df):
     with pd.option_context('display.max_colwidth', -1):#len(df)): # None did not work
         display(df)
         
-def group(grouped_df, idx=None):
+def show_group(grouped_df, idx=None):
     '''
     Return group from grouped df by group numeric index not label.
     Returns random group if no index is passed.
@@ -44,7 +44,7 @@ def group(grouped_df, idx=None):
     return tup[1]
 
 
-sort_val(dicti, reverse=True):
+sort_dict(dicti, reverse=True):
     assert isinstance(dicti, dict)
     out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1])}
     return out
