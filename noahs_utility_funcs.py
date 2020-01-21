@@ -2,6 +2,8 @@ from IPython.display import display
 import pandas as pd
 import numpy as np
 
+import pickle
+
 
 #Inspo: https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
 
@@ -48,4 +50,13 @@ def sort_dict(dicti, reverse=True):
     assert isinstance(dicti, dict)
     out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1])}
     return out
+
+def load_pickle(path):
+    with open(path, 'rb') as f:
+        out = pickle.load(f)
+        return out
+    
+def save_pickle(path, obj):
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f, -1)
 
