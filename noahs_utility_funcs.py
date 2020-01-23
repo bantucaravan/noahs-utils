@@ -56,7 +56,12 @@ def load_pickle(path):
         out = pickle.load(f)
         return out
     
-def save_pickle(path, obj):
+def save_pickle(obj, path):
     with open(path, 'wb') as f:
         pickle.dump(obj, f, -1)
 
+def pretty_cm(y_true, y_pred):
+    cm = pd.crosstab(y_true, y_pred)
+    cm.columns.name = 'Predictions'
+    cm.index.name = 'Truth'
+    return cm
