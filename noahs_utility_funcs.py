@@ -65,3 +65,17 @@ def pretty_cm(y_true, y_pred):
     cm.columns.name = 'Predictions'
     cm.index.name = 'Truth'
     return cm
+
+
+########## Deep Learning Image processing
+
+def plot_image(pixels):
+    """
+    From https://raw.githubusercontent.com/hellodanylo/ucla-deeplearning/master/02_cnn/utils.py
+    Simply plots an image from its pixels.
+    Pixel values must be either integers in [0, 255], or floats in [0, 1].
+    """
+    plt.imshow(pixels)
+    plt.yticks([])
+    plt.xticks([])
+
