@@ -81,23 +81,24 @@ def pretty_cm(y_true, y_pred):
     cm.index.name = 'Truth'
     return cm
 
-
+############################################
 ########## Deep Learning Image processing
 
-def plot_image(pixels):
+def plot_image(pixels, ax=None):
     """
     From https://raw.githubusercontent.com/hellodanylo/ucla-deeplearning/master/02_cnn/utils.py
     Simply plots an image from its pixels.
     Pixel values must be either integers in [0, 255], or floats in [0, 1].
     """
-    plt.imshow(pixels)
-    plt.yticks([])
-    plt.xticks([])
-    return plt.gca()
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.imshow(pixels)
+    ax.axis('off')
+    return ax
     #plt.show()
     
-    
-    ############### Proj Management utils
+##########################################
+############### Proj Management utils
     
     
 
@@ -165,6 +166,8 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         elif isinstance(obj, np.number):
             return obj.item()
+        else: # is this too broad...?
+            return str(obj)
         return json.JSONEncoder.default(self, obj)
 
 
