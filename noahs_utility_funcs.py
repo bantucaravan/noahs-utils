@@ -81,4 +81,5 @@ def plot_image(pixels):
     plt.imshow(pixels)
     plt.yticks([])
     plt.xticks([])
+    plt.show()
 
