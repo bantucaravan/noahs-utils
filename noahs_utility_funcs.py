@@ -4,6 +4,8 @@ import numpy as np
 
 import pickle
 
+# Download this file (in ipython) with:
+# !curl -L -o noahs_utils.py https://gist.github.com/bantucaravan/1956003e25c056c550a088542b41dc91/raw/noahs_utility_funcs.py
 
 #Inspo: https://stackoverflow.com/questions/26873127/show-dataframe-as-table-in-ipython-notebook
 
