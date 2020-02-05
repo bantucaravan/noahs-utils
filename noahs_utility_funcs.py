@@ -219,3 +219,34 @@ def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
     df = json_normalize(list(dct.values()))
     df = df.dropna(axis=1, how='all')
     return df
+
+####### tf  model eval
+
+def plot_tf_training_metric(history, metric, save=False)
+'''
+Issue: add pretty formatting and naming for plot labels
+'''
+
+    plt.plot(history.epoch, history.history[metric], label='Train '+metric)
+    plt.plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
+    plt.title('Train vs Test ' + metric)
+    plt.legend()
+    if save:
+        plt.savefig('../figs/' + str(num) + ' Train Test %s.png' %(metric))
+
+
+def plot_tf_training(history, metric):
+    plot_tf_training_metric(history, metric='loss')
+    plot_tf_training_metric(history, metric=metric)
+
+
+def top_epochs(history, metric)
+'''
+Issue: min vs max for different metrics
+'''
+    res = dict(zip(history.epoch, history.history['val_'+metric]))
+    #best_val_acc, best_val_acc_epoch = float(max(res.values())),  int(max(res, key=res.get))
+
+    print('Best %s by epoch:' %(metric))
+    out = [(res[ep], ep) for ep in sorted(res , key = res.get)][::-1][:30]
+    return out
