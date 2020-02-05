@@ -236,6 +236,8 @@ def plot_tf_training_metric(history, metric, save=False):
     plt.plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
     plt.title('Train vs Test ' + metric)
     plt.legend()
+    plt.show()
+    
     if save:
         plt.savefig('../figs/' + str(num) + ' Train Test %s.png' %(metric))
 
