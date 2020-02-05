@@ -2,8 +2,20 @@ from IPython.display import display
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pandas.io.json import json_normalize
+from sklearn.metrics import confusion_matrix
+import scipy.stats
 
+
+import json
+import os
+import re
+import warnings
 import pickle
+import copy
+
+
+
 
 # Download this file (in ipython) with:
 # !curl -L -o noahs_utils.py https://gist.github.com/bantucaravan/1956003e25c056c550a088542b41dc91/raw/noahs_utility_funcs.py
