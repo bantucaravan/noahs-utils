@@ -83,3 +83,127 @@ def plot_image(pixels):
     plt.xticks([])
     return plt.gca()
     #plt.show()
+    
+    
+    ############### Proj Management utils
+    
+    
+
+# write json - write json (not append) to disk
+def write_json(dct, path, **kwargs):
+    '''
+    write json to disk
+
+    path -- file path
+
+    **kwargs -- passed to json.dump()
+
+    issues:
+    validate .json file extension?
+    '''
+    with open(path, 'wt') as f:
+        json.dump(dct, f, **kwargs)
+
+
+# read json - read json from disk to memory
+def read_json(path):
+    '''
+    read json from disk
+
+    path -- file path
+
+    issues:
+    validate .json file extension?
+    '''
+    with open(path, 'rt') as f:
+        dct = json.load(f)
+    return dct
+
+
+def read_log_json(run_num=None, path='../logs/model logs (master file).json'):
+    '''
+    Description: read entire log json into memory, optionally return only specific single 
+    (or multiple) run logs
+    
+    Issues:
+    * valudate .json file ext?
+    * currently only single not multiple run num specification supported
+
+    '''
+
+    outlog = read_json(path)
+    # all json keys (or all json keys and values? NO) must be str. I am 
+    # assuming that keys can be converted by int()
+    outlog = {int(k): v for k,v in outlog.items()}
+    if run_num is not None:
+        outlog = {run_num: outlog[run_num]}
+
+    return outlog
+
+
+class NumpyEncoder(json.JSONEncoder):
+    '''
+    for use in converting non-json serializable obj types into json serializable 
+    types in write_log_json()
+
+    See for explanation: https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable
+    '''
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.number):
+            return obj.item()
+        return json.JSONEncoder.default(self, obj)
+
+
+def write_log_json(json_log, path='../logs/model logs (master file).json', **kwargs):
+    '''
+    Description: take a json log for a single (or multiple) runs, and .update() 
+    master json log so that entries for that run number are overwritten
+
+    json_log -- must be a dict with single (or multiple) integer keys
+
+    **kwargs -- passed to json.dump() 
+
+    Issues:
+    * valudate .json file ext?
+    * currently only single not multiple run num specification supported
+    * allows possible overwrite of all logs with incorrect information! (must save back ups of log json file regularly!)
+
+
+    '''
+    
+    ############################
+    if True:
+        # Validate keys
+        for i in json_log.keys():
+            if isinstance(i, int):
+                pass
+            elif np.issubdtype(i, np.integer):
+                json_log = {i.item(): json_log[i]}
+
+            else:
+                raise TypeError('All keys of json_log must be python type int')
+
+    ################
+
+    master_log = read_log_json(path=path)
+
+    master_log.update(json_log)
+
+    write_json(master_log, path, **kwargs)
+
+
+
+def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
+    '''
+
+    issues:
+    * use run_nums as index?
+    * currently only supports selecting single not multiple run_nums
+
+    '''
+    dct = read_log_json(run_num)
+    df = json_normalize(list(dct.values()))
+    df = df.dropna(axis=1, how='all')
+    return df
