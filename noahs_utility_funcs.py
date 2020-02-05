@@ -125,8 +125,7 @@ def read_json(path):
 
     path -- file path
 
-    issues:
-    validate .json file extension?
+    issue: validate .json file extension?
     '''
     with open(path, 'rt') as f:
         dct = json.load(f)
@@ -147,7 +146,7 @@ def read_log_json(run_num=None, path='../logs/model logs (master file).json'):
     outlog = read_json(path)
     # all json keys (or all json keys and values? NO) must be str. I am 
     # assuming that keys can be converted by int()
-    outlog = {int(k): v for k,v in outlog.items()}
+    #outlog = {int(k): v for k,v in outlog.items()}
     if run_num is not None:
         outlog = {run_num: outlog[run_num]}
 
@@ -189,7 +188,7 @@ def write_log_json(json_log, path='../logs/model logs (master file).json', **kwa
     '''
     
     ############################
-    if True:
+    if False:
         # Validate keys
         for i in json_log.keys():
             if isinstance(i, int):
