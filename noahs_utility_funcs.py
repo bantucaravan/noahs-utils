@@ -3,8 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pandas.io.json import json_normalize
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, classification_report
 import scipy.stats
+import seaborn as sns
 
 
 import json
@@ -63,7 +64,7 @@ def show_group(grouped_df, idx=None):
 
 def sort_dict(dicti, reverse=True):
     assert isinstance(dicti, dict)
-    out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1])}
+    out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1], reverse=reverse)}
     return out
 
 def load_pickle(path):
@@ -74,6 +75,67 @@ def load_pickle(path):
 def save_pickle(obj, path):
     with open(path, 'wb') as f:
         pickle.dump(obj, f, -1)
+
+############################################
+############ Model Evaluation
+
+
+
+def metrics_report(ytrue, preds, classnames=None):
+    out = pd.DataFrame(classification_report(ytrue, preds, output_dict=True))
+    if classnames is not None:
+        cols = list(out.columns)
+        cols[:-3] = classnames
+        out.columns = cols
+    return out
+
+
+# Almost Direct Copy from https://gist.github.com/shaypal5/94c53d765083101efc0240d776a23823
+def confusion_matrix(y_true, y_pred, class_names=None, figsize = (10,7), fontsize=14):
+    """Prints a confusion matrix, as returned by sklearn.metrics.confusion_matrix, as a heatmap.
+    
+    Arguments
+    ---------
+    ####confusion_matrix: numpy.ndarray
+        ##The numpy.ndarray object returned from a call to sklearn.metrics.confusion_matrix. 
+        ###Similarly constructed ndarrays can also be used.
+    class_names: list-like
+        An ordered list of class names, in the order they index the given confusion matrix.
+    figsize: tuple
+        A 2-long tuple, the first value determining the horizontal size of the ouputted figure,
+        the second determining the vertical size. Defaults to (10,7).
+    fontsize: int
+        Font size for axes labels. Defaults to 14.
+        
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The resulting confusion matrix figure
+
+
+    Issue: sort out the return figure issue (return figure will plot imge twice)
+
+    Issue: change color map?
+    """
+
+    df_cm = pd.crosstab(y_true, y_pred)
+    if class_names is not None:
+        df_cm.columns = class_names
+        df_cm.index = class_names
+    
+    fig = plt.figure(figsize=figsize)
+    try:
+        heatmap = sns.heatmap(df_cm, annot=True, fmt="d", linewidths=.5)
+    except ValueError:
+        raise ValueError("Confusion matrix values must be integers.")
+    heatmap.yaxis.set_ticklabels(heatmap.yaxis.get_ticklabels(), rotation=0, ha='right', fontsize=fontsize)
+    heatmap.xaxis.set_ticklabels(heatmap.xaxis.get_ticklabels(), rotation=45, ha='right', fontsize=fontsize)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    
+    #return fig
+    return df_cm
+
 
 def pretty_cm(y_true, y_pred):
     cm = pd.crosstab(y_true, y_pred)
@@ -118,8 +180,19 @@ def write_json(dct, path, **kwargs):
         json.dump(dct, f, **kwargs)
 
 
+def interger_keys(dct):
+# for use as object_hook= in json.load()
+
+# Issue: convert all single numerics (floats and negatives too) back, 
+# numerics in lists and in values position are already converted
+    if any(k.isdigit() for k in dct):
+        return {int(k) if k.isdigit() else k:v for k,v in dct.items()}
+    return dct
+
+
+
 # read json - read json from disk to memory
-def read_json(path):
+def read_json(path, **kwargs):
     '''
     read json from disk
 
@@ -128,11 +201,19 @@ def read_json(path):
     issue: validate .json file extension?
     '''
     with open(path, 'rt') as f:
-        dct = json.load(f)
+        dct = json.load(f, **kwargs)
     return dct
 
+#BRIAN: 
+# write log json: handle if file doesn’t exist yet, and is empty; 
+#*with key validation handle if key is string ,try catch read_jsonlog conversion from string .. or use some native json module default()
+# * handele more complex objs…(else return str(obJ)? 
+# * handle jsone encode error partial writing to disk
+# * also loook up existing json logging options
 
-def read_log_json(run_num=None, path='../logs/model logs (master file).json'):
+
+
+def read_log_json(run_num=None, path='../logs/model logs (master file).json', object_hook=interger_keys):
     '''
     Description: read entire log json into memory, optionally return only specific single 
     (or multiple) run logs
@@ -143,7 +224,7 @@ def read_log_json(run_num=None, path='../logs/model logs (master file).json'):
 
     '''
 
-    outlog = read_json(path)
+    outlog = read_json(path, object_hook=object_hook)
     # all json keys (or all json keys and values? NO) must be str. I am 
     # assuming that keys can be converted by int()
     #outlog = {int(k): v for k,v in outlog.items()}
@@ -159,6 +240,9 @@ class NumpyEncoder(json.JSONEncoder):
     types in write_log_json()
 
     See for explanation: https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable
+   
+    Issue: overly braod - if not np array or np numeric, convert to string.. be more specific
+    
     '''
     def default(self, obj):
         if isinstance(obj, np.ndarray):
@@ -168,6 +252,7 @@ class NumpyEncoder(json.JSONEncoder):
         else: # is this too broad...?
             return str(obj)
         return json.JSONEncoder.default(self, obj)
+
 
 
 def write_log_json(json_log, path='../logs/model logs (master file).json', **kwargs):
@@ -187,25 +272,34 @@ def write_log_json(json_log, path='../logs/model logs (master file).json', **kwa
 
     '''
     
-    ############################
-    if False:
-        # Validate keys
-        for i in json_log.keys():
-            if isinstance(i, int):
-                pass
-            elif np.issubdtype(i, np.integer):
-                json_log = {i.item(): json_log[i]}
 
-            else:
-                raise TypeError('All keys of json_log must be python type int')
+    if os.path.getsize(path) > 0: # if file in not empty 
+        #object_hook=interger_keys insures integer keys are converted into python ints
+        try:
+            master_log = read_json(path=path, object_hook=interger_keys) 
+            old_log = master_log.copy()
+            master_log.update(json_log)
+            empty=False
+        except json.JSONDecodeError as e:
+            msg = 'JSON file misformatted, failed to read.'
+            raise json.JSONDecodeError(msg, e.doc, e.pos)
 
-    ################
+    else:
+        master_log = json_log # assuming key in run uuid
+        empty=True
+    
 
-    master_log = read_log_json(path=path)
+    try:
+        write_json(master_log, path, **kwargs)
+    except TypeError as e:
+            # Overwrite file just in case in raising error json wrote a partial, 
+            # unreadable json string
+        if not empty:
+            write_json(old_log, path, **kwargs)
+        else:
+            open(path,'wt').close() # earses file contents
+        raise type(e)('Failed to write JSON because non-json serializable type was passed.')
 
-    master_log.update(json_log)
-
-    write_json(master_log, path, **kwargs)
 
 
 
@@ -242,12 +336,12 @@ def plot_tf_training_metric(history, metric, save=False):
         plt.savefig('../figs/' + str(num) + ' Train Test %s.png' %(metric))
 
 
-def plot_tf_training(history, metric):
+def plot_tf_training(history, metric='accuracy'):
     plot_tf_training_metric(history, metric='loss')
     plot_tf_training_metric(history, metric=metric)
 
 
-def top_epochs(history, metric):
+def top_epochs(history, metric='accuracy', top_n=-1):
     '''
     Issue: min vs max for different metrics
     '''
@@ -255,5 +349,5 @@ def top_epochs(history, metric):
     #best_val_acc, best_val_acc_epoch = float(max(res.values())),  int(max(res, key=res.get))
 
     print('Best %s by epoch:' %(metric))
-    out = [(res[ep], ep) for ep in sorted(res , key = res.get)][::-1][:30]
-    return out
+    out = sort_dict(res, reverse=True)#[:top_n]
+    return {k:out[k] for k in list(out.keys())[:top_n]}
