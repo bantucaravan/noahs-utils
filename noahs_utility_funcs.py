@@ -323,6 +323,8 @@ def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
 
 def plot_tf_training_metric(history, metric, save=False):
     '''
+    save -- pass full file path for img to be saved file 
+
     Issue: add pretty formatting and naming for plot labels
     '''
 
@@ -333,12 +335,43 @@ def plot_tf_training_metric(history, metric, save=False):
     plt.show()
     
     if save:
-        plt.savefig('../figs/' + str(num) + ' Train Test %s.png' %(metric))
+        # do some path validation...?
+        #savepath = '../figs/Train Test %s %s.png' %(metric, save)
+        dirpath = os.path.split(save)[0]
+        os.makedirs(dirpath, exist_ok=True)
+        plt.savefig(path)
 
 
-def plot_tf_training(history, metric='accuracy'):
-    plot_tf_training_metric(history, metric='loss')
-    plot_tf_training_metric(history, metric=metric)
+def plot_tf_training(history, metric='accuracy',save=False):
+    '''
+    save -- pass full file path for img to be saved file
+    '''
+    
+    #plot_tf_training_metric(history, metric='loss')
+    #plot_tf_training_metric(history, metric=metric)
+
+    fig, axes = plt.subplots(2,1, figsize=(5,8))
+    axes[0].plot(history.epoch, history.history[metric], label='Train '+metric)
+    axes[0].plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
+    axes[0].set(title='Train vs Test ' + metric)
+    axes[0].legend()
+
+    metric='loss'
+    axes[1].plot(history.epoch, history.history[metric], label='Train '+metric)
+    axes[1].plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
+    axes[1].set(title='Train vs Test ' + metric)
+    axes[1].legend()
+    
+    plt.tight_layout()
+
+    if save:
+        # do some path validation...?
+        #savepath = '../figs/Train Test %s %s.png' %(metric, save)
+        dirpath = os.path.split(save)[0]
+        os.makedirs(dirpath, exist_ok=True)
+        plt.savefig(save)
+    
+    #plt.show()
 
 
 def top_epochs(history, metric='accuracy', top_n=-1):
