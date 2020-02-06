@@ -229,7 +229,8 @@ def read_log_json(run_num=None, path='../logs/model logs (master file).json', ob
     # assuming that keys can be converted by int()
     #outlog = {int(k): v for k,v in outlog.items()}
     if run_num is not None:
-        outlog = {run_num: outlog[run_num]}
+        #outlog = {run_num: outlog[run_num]}
+        return outlog[run_num]
 
     return outlog
 
@@ -311,10 +312,25 @@ def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
     * currently only supports selecting single not multiple run_nums
 
     '''
-    dct = read_log_json(run_num)
+    dct = read_log_json(run_num, path=path)
     df = json_normalize(list(dct.values()))
+    df.index = dct.keys()
     df = df.dropna(axis=1, how='all')
     return df
+
+
+def try_args(arg_dict, method):
+    dct = arg_dict.copy()
+    while len(dct)>0:
+        try:
+            method(**dct)
+            break
+        except TypeError as e:
+            print(e.args)
+            badkey = re.findall(r"'(\w+)'", str(e))[0]
+            del dct[badkey]
+    return dct
+
 
 
 #####################
