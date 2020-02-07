@@ -118,7 +118,9 @@ def confusion_matrix(y_true, y_pred, class_names=None, figsize = (10,7), fontsiz
     Issue: change color map?
     """
 
-    df_cm = pd.crosstab(y_true, y_pred)
+    #df_cm = pd.crosstab(y_true, y_pred) # don't use bc it does not include col 
+    # of zeros if a class is not predicted
+    df_cm = pd.DataFrame(confusion_matrix(y_true, y_pred))
     if class_names is not None:
         df_cm.columns = class_names
         df_cm.index = class_names
