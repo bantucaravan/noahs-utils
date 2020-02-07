@@ -407,10 +407,17 @@ def plot_tf_training(history, metric='accuracy', save=False):
 def top_epochs(history, metric='accuracy', top_n=-1):
     '''
     Issue: min vs max for different metrics
+
+    Issue: top_n not implemented because [:top_n] where top_n==-1 was 
+    cutting off the last  value.
     '''
     res = dict(zip(history.epoch, history.history['val_'+metric]))
     #best_val_acc, best_val_acc_epoch = float(max(res.values())),  int(max(res, key=res.get))
 
-    print('Best %s by epoch:' %(metric))
+    print('Best %s by epoch (1-indexed):' %(metric))
     out = sort_dict(res, reverse=True)#[:top_n]
-    return {k:out[k] for k in list(out.keys())[:top_n]}
+    # + 1 for 1-indexing
+    return {k+1:v for k,v in out.items()}
+    
+    # bad implementation of top_n
+    #return {k+1:out[k] for k in list(out.keys())[:top_n]}
