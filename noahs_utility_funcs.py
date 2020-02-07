@@ -306,7 +306,6 @@ def write_log_json(json_log, path='../logs/model logs (master file).json', **kwa
 
 def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
     '''
-
     issues:
     * use run_nums as index?
     * currently only supports selecting single not multiple run_nums
@@ -320,6 +319,12 @@ def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
 
 
 def try_args(arg_dict, method):
+    '''
+    For passing a dict of a super set of acceptable args to a function, 
+    removing unacceptable args until a maximal subset of acceptable args 
+    is reached.
+    
+    '''
     dct = arg_dict.copy()
     while len(dct)>0:
         try:
@@ -337,48 +342,57 @@ def try_args(arg_dict, method):
 ####### tf  model eval
 
 
-def plot_tf_training_metric(history, metric, save=False):
+def test_train_curve(history, metric, ax=None, save=False):
     '''
+    # was going to run this in plot_tf_training did not so as to ease 
+    # plotting in subplot, I could easily change to have this func plot
+    #  in subplot
+    
     save -- pass full file path for img to be saved file 
 
     Issue: add pretty formatting and naming for plot labels
+
+    Issue: - add optional model name (data prep and model type) to train test 
+    graph and epoch number
     '''
 
-    plt.plot(history.epoch, history.history[metric], label='Train '+metric)
-    plt.plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
-    plt.title('Train vs Test ' + metric)
-    plt.legend()
-    plt.show()
-    
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    ax.plot(history.epoch, history.history[metric], label='Train '+metric)
+    ax.plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
+    ax.set(title='Train vs Test ' + metric)
+    ax.legend()
+
+    #Add model name and epoch
+    #text = 'Model: \nEpoch: %d' %(len(history.epoch))
+    #boxstyle = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    #ax.text(1.05, 0.95, text, transform=ax.transAxes, fontsize=12,
+    #va='top', ha='left', bbox=boxstyle)
+
     if save:
         # do some path validation...?
         #savepath = '../figs/Train Test %s %s.png' %(metric, save)
         dirpath = os.path.split(save)[0]
         os.makedirs(dirpath, exist_ok=True)
         plt.savefig(path)
+    
+
+    return ax
 
 
-def plot_tf_training(history, metric='accuracy',save=False):
+
+
+def plot_tf_training(history, metric='accuracy', save=False):
     '''
     save -- pass full file path for img to be saved file
     '''
-    
-    #plot_tf_training_metric(history, metric='loss')
-    #plot_tf_training_metric(history, metric=metric)
-
     fig, axes = plt.subplots(2,1, figsize=(5,8))
-    axes[0].plot(history.epoch, history.history[metric], label='Train '+metric)
-    axes[0].plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
-    axes[0].set(title='Train vs Test ' + metric)
-    axes[0].legend()
 
-    metric='loss'
-    axes[1].plot(history.epoch, history.history[metric], label='Train '+metric)
-    axes[1].plot(history.epoch, history.history['val_'+metric], label='Test '+metric)
-    axes[1].set(title='Train vs Test ' + metric)
-    axes[1].legend()
-    
-    plt.tight_layout()
+    test_train_curve(history, metric='loss', ax=axes[0])
+    test_train_curve(history, metric=metric, ax=axes[1])
+
+    plt.tight_layout() # change to fig?
 
     if save:
         # do some path validation...?
