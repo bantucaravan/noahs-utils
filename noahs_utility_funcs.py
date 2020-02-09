@@ -418,7 +418,8 @@ def top_epochs(history, metric='accuracy', top_n=-1):
     #best_val_acc, best_val_acc_epoch = float(max(res.values())),  int(max(res, key=res.get))
 
     print('Best %s by epoch (1-indexed):' %(metric))
-    out = sort_dict(res, reverse=True)
+    reverse = False if metric in ['loss'] else True
+    out = sort_dict(res, reverse=reverse)
     # + 1 for 1-indexing
     return {k+1:v for k,v in out.items()}
     
