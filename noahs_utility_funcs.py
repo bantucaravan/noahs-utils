@@ -3,12 +3,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pandas.io.json import json_normalize
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, roc_curve, roc_auc_score, accuracy_score, r2_score, mean_absolute_error
 from sklearn.metrics import confusion_matrix as cm_sklearn
 import scipy.stats
 import seaborn as sns
+import statsmodels.api as sm
+from sklearn.model_selection import KFold
 
-
+import inspect
 import json
 import os
 import re
@@ -17,6 +19,8 @@ import pickle
 import copy
 
 
+###########################################
+################ general utils
 
 
 # Download this file (in ipython) with:
@@ -61,6 +65,22 @@ def show_group(grouped_df, idx=None):
     print(tup[0])
     
     return tup[1]
+
+
+def insert(text, breaks, insertion='\n'):
+    '''
+    insert substr at arbitrary indexes in str.
+
+    Issue: what about inserting at single insertion point?
+
+    Issue: are insertion points 0-indexed or 1-indexed?
+
+    '''
+    bits = [text[breaks[i-1]:breaks[i]] for i in range(1, len(breaks))]
+    if breaks[0] != 0:
+        bits = [text[:breaks[0]]] + bits
+    if breaks[-1] != (len(text)):
+            bits = bits + [text[breaks[-1]:]]
 
 
 def sort_dict(dicti, reverse=True):
@@ -146,6 +166,33 @@ def pretty_cm(y_true, y_pred):
     cm.index.name = 'Truth'
     return cm
 
+
+def plot_roc_auc(ytrue, prob_pred):
+'''
+mostly from copied form sklearn docs
+
+Issue: binary class only so far, refer to sklearn docs for multilabel example to mostly copy
+
+'''
+    fpr, tpr, thresh = roc_curve(ytrue, prob_pred)
+    auc_score = roc_auc_score(ytrue, prob_pred)
+
+    #plt.figure()
+    lw = 2
+    plt.plot(fpr, tpr, color='darkorange',
+             lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([-0.01, 1.0])
+    plt.ylim([0.0, 1.01])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic\nArea Under Curve')
+    plt.legend(loc="lower right")
+    plt.gca().set_aspect('equal', 'box')
+    #plt.show()
+
+    return plt.gca()
+
 ############################################
 ########## Deep Learning Image processing
 
@@ -183,7 +230,7 @@ def write_json(dct, path, **kwargs):
         json.dump(dct, f, **kwargs)
 
 
-def interger_keys(dct):
+def integer_keys(dct):
 # for use as object_hook= in json.load()
 
 # Issue: convert all single numerics (floats and negatives too) back, 
@@ -427,18 +474,148 @@ def top_epochs(history, metric='accuracy', top_n=-1):
 
 
 ##################################################
+################### regression plot utils
 
-def insert(text, breaks, insertion='\n'):
+
+def plot_resid_predicted(yhat, resid):
+    plt.plot(yhat, resid, 'o')
+    plt.axhline(color='orange')
+    plt.title('Residuals vs Predicted Values')
+    plt.ylabel('Residuals')
+    plt.xlabel('Predicted Values')
+    plt.axis('equal') # so that we see errors on same scale as range of yhat
+
+
+    return plt.gca()
+
+
+def plot_pred_obsv(data, results_fittedvalues, *kwargs):
+    fig, ax = plt.subplots()
+    ax.plot(results_fittedvalues, data.cost, 'o', *kwargs)
+    sm.graphics.abline_plot(0,.5 , ax = ax, color='orange')
+    ax.set(xlabel='predicted y values', ylabel='observed y values')
+    ax.margins(.1) # why is this necesary
+
+    return plt.gca()
+
+
+
+##################################################
+################## statsmodels utils
+
+
+def kfold_statsmodels(model, metrics, n_splits=5, fit_args=None):
     '''
-    insert substr at arbitrary indexes in str.
+    fit_args: (Dict) args passed to .fit() method
 
-    Issue: what about inserting at single insertion point?
 
-    Issue: are insertion points 0-indexed or 1-indexed?
+    Issue: record inital model  coefs, and model coefs at each Fold, to check
+     for variation in coefs over data... robustness
 
+    Issue[closed]: why not update vars(model) instead of passing kwargs even for exog and endog, 
+    A: because if init doesn't get groups= for MixedLM, it will throw an error/. Also, 
+    kwargs are only things that were explicitly passed to init, 
+
+    Issue: what if the version of init args in vars(model) is somehow transformed. Also what
+     about init arg elements that depend on data size, like group for example where a group may
+      not be present in the training fold.
+
+    Issue: turn in to class, with an init where you pass the model and any init args you would
+     pass to the model, and fit method which took fit args and ran kfold. Why?, to allow passing
+      of init args directly and not retrivea from vars(model) without mixing init and fit args
+
+    Issue[closed]: why not pass statsmodels model type and endog, and exog vars to function and 
+    not initialized model? Reasons: (a) to get the from formula data transformations? 
+    rebuf: include a from formula bool arg, (b) to capture all the init args passed 
+    in the original model. But what if their processing depends on the subset of 
+    endog/exog data
     '''
-    bits = [text[breaks[i-1]:breaks[i]] for i in range(1, len(breaks))]
-    if breaks[0] != 0:
-        bits = [text[:breaks[0]]] + bits
-    if breaks[-1] != (len(text)):
-            bits = bits + [text[breaks[-1]:]]
+
+    # validate metrics
+    metrics = metrics if isinstance(metrics, list) else [metrics]
+    m_valid = {'acc': accuracy_score, 'roc':roc_auc_score, 'r2':r2_score, 'mae': mean_absolute_error}
+    m = {n:f for n,f in m_valid.items() if n in metrics}
+    if len(m) == 0:
+        raise ValueError('Metrics must me one of {}'.format(m_valid.keys()))
+    m_res = {n:[] for n,f in m.items()}
+
+    # save input data
+    x = model.exog
+    y = model.endog
+    #hacky solution see below
+    if isinstance(model, sm.MixedLM):
+        g = model.groups
+        
+
+    model_type = type(model); print('Model:', model_type)
+    init_args = inspect.getfullargspec(type(model)).args
+    kwargs = {k:v for k,v in vars(model).items() if k in init_args and k not in ['exog', 'endog']}
+
+    kfold = KFold(shuffle=True, n_splits=n_splits)
+    for i, (test_idx, train_idx) in enumerate(kfold.split(x)):
+        ### groups= init arg... needs to be subset tooooooooooo (for mixedlm    )
+        # hacky solution
+        if isinstance(model, sm.MixedLM):
+            kwargs['groups'] = g[train_idx]   # g is a numpy. What size?
+        model = model_type(y[train_idx], x[train_idx,:], **kwargs)
+
+        if fit_args is None:
+            res = model.fit()
+        else:
+            res = model.fit(**fit_args)
+        yhat = res.predict(x[test_idx,:])
+        for n in m:
+            m_res[n].append(m[n](y[test_idx], np.round(yhat)))
+       #acc = accuracy_score(y[test_idx], np.round(yhat))
+        #accs.append(acc)
+        #roc = roc_auc_score(y[test_idx], np.round(yhat))
+        #rocs.append(roc)
+        print('Fold:', i)
+
+    return m_res
+
+
+### Improvement : pass exog and endog and any other init args to the function 
+# itself and maybe pass model type as an arg tooo. Or even better, dict of any 
+# params you want to pass to be expanded in init, its almost universal enought to 
+# expand beyond statsmodels
+
+
+### Problem: failed appraoch, pass all vars in vars(model) (expecpt endog and exog) 
+# to new instance
+# Flaw: some vars in vars() were created after/outside of __init__ and where 
+# thus could not be passed to __init__
+## approaches:
+
+# Status: semi-failed
+# 1) replace only exog and endog in each loop
+# Drawback: there might be instance vars held over after fit, that may not be reset upun the next fit call
+# Drawback I don't know what happend to a arg after its been passed. in case of groups= in sm.MixedLM replacing the attr didn't work, it needed to be passed to init
+
+# 2) use inspect.getfullargspec to reconstruct which vars() args can be passed to __init__ 
+# Is it slower?
+# limitation: it will not tell you (directly) the names of args passed as **kwargs to the __init__
+
+# 3) try loop for passing nested sets of vars() to __init__
+# slower?
+
+
+#### Problem: pass fit methods  not in __init__
+# Approaches
+
+#1) pass fit args explicity  (current approach)
+
+#2) pass a fitted model initially? 
+#  Drawback: (would that make recovering args more) 
+# problem atic becuase the values in vars() may have been alterned by .fit() a
+# nd be unsuitble for passing  to __init__
+
+### Issue: bc kwargs have already passed through what every __init__ did to 
+# it, so if we pass them to init again it may reproces them, however if we just 
+# update teh attrs  some necessary secondary attrs may not be updated as a result 
+# of whatever init processing!!
+
+#possible solution: update the intance attrs with kwargs rather than pass then, 
+# problems with this dicussed above (use vars(model).update(kwargs))
+
+
