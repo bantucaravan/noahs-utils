@@ -409,8 +409,6 @@ def plot_tf_training(history, metric='accuracy', save=False):
 
 def top_epochs(history, metric='accuracy', top_n=-1):
     '''
-    Issue: min vs max for different metrics
-
     Issue: top_n not implemented because [:top_n] where top_n==-1 was 
     cutting off the last  value.
     '''
@@ -425,3 +423,22 @@ def top_epochs(history, metric='accuracy', top_n=-1):
     
     # bad implementation of top_n
     #return {k+1:out[k] for k in list(out.keys())[:top_n]}
+
+
+
+##################################################
+
+def insert(text, breaks, insertion='\n'):
+    '''
+    insert substr at arbitrary indexes in str.
+
+    Issue: what about inserting at single insertion point?
+
+    Issue: are insertion points 0-indexed or 1-indexed?
+
+    '''
+    bits = [text[breaks[i-1]:breaks[i]] for i in range(1, len(breaks))]
+    if breaks[0] != 0:
+        bits = [text[:breaks[0]]] + bits
+    if breaks[-1] != (len(text)):
+            bits = bits + [text[breaks[-1]:]]
