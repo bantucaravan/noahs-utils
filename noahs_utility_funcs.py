@@ -116,6 +116,12 @@ def list_file_hierarchy(startpath):
 
     Returns:
         None
+
+    
+    Issue: return string optionally (to write to disk or search/regex through), 
+    maybe add a native grep like regex functionality
+
+    Issue: include option to only return directory structure not files.
     """
     import os
     for root, dirs, files in os.walk(startpath):
@@ -663,8 +669,10 @@ class KFoldStatsmodels:
     annoying if you use dict(k= v)
     '''
     
-    def __init__(self, metrics, n_splits=5, fit_args=None):
-
+    def __init__(self, metrics, n_splits=5, fit_args=None, predict=None):
+        '''
+        predict: Custom predict function that takes results obj and newdata df
+        '''
         # validate metrics
         metrics = metrics if isinstance(metrics, list) else [metrics]
         m_valid = {'acc': accuracy_score, 'roc':roc_auc_score, 'r2':r2_score, 'mae': mean_absolute_error}
@@ -675,6 +683,7 @@ class KFoldStatsmodels:
 
         self.n_splits = n_splits
         self.metrics = metrics
+        self.predict = predict
 
     def model(self, model, *data_args, from_formula=None, data=None, **kwargs):
         '''
@@ -693,9 +702,15 @@ class KFoldStatsmodels:
         Issue: passing numpy arrays to api init method may cause issue with selector syntax consistency btw np and pd
         Issue: consider a check that model is subclass of statsmodel base estimator class
         Issue: move model arg to __init__?, honestly all of these args could be in init...
-        Issue: consider (almost certainly should) two separete functions one for from_formula, one from not.., model form_formual to __init__ and create two internal build_model funcs one for each inputs/api, and decide which one to use from the from_formula switch
-        * Better: use fitting run switch, and a from_formula/api funcs, with true collect (formula, data, kwargs - for from_formula) (endog, exog, kwargs - for api), run the rest of the function identically
-        Issue: create check for categorical vs contiuous acc metrics, cirrently only continuoius
+        Issue: consider (almost certainly should) two separete functions one for
+        from_formula, one from not.., model form_formual to __init__ and create
+        two internal build_model funcs one for each inputs/api, and decide which 
+        one to use from the from_formula switch
+        * Better: use fitting run switch, and a from_formula/api funcs, with true 
+        collect (formula, data, kwargs - for from_formula) (endog, exog, 
+        kwargs - for api), run the rest of the function identically
+        Issue: create check for categorical vs contiuous acc metrics, cirrently 
+        only continuoius
         ''' 
         #record init vars for model (really buildmodel())
         #orig_init_args = vars()
@@ -749,7 +764,7 @@ class KFoldStatsmodels:
 
         if from_formula is not None:
             # if no kwargs unpacking an empty dict... cool??
-            print('in build model:', kwargs)
+            print('kwargs in build model:', kwargs)
             model = model.from_formula(from_formula, data=data, **kwargs) 
 
         else: # normal api
@@ -773,9 +788,12 @@ class KFoldStatsmodels:
         fold_init_args = orig_init_args.copy() # shallow copy
         
         params = []
+        pvalues=[]
         exact = defaultdict(list)
         kfold = KFold(shuffle=True, n_splits=self.n_splits)
-        for i, (test_idx, train_idx) in enumerate(kfold.split(self.full_x_data)):
+        for i, (train_idx, test_idx) in enumerate(kfold.split(self.full_x_data)):
+            #print('test shape:', test_idx.shape)
+            #print('train shape:', train_idx.shape)
 
             if from_formula is not None:
                 fold_init_args['data'] = orig_init_args['data'].iloc[train_idx,:]
@@ -789,17 +807,21 @@ class KFoldStatsmodels:
             if isinstance(self.model, sm.MixedLM):
                 fold_init_args['groups'] = orig_init_args['groups'].iloc[train_idx] 
         
-            model = self.build_model(**fold_init_args)
-            res = model.fit(**fit_args)
-            print('End FIT')
-            yhat = res.predict(self.full_x_data.iloc[test_idx,:])
+            model = self.build_model(**fold_init_args) 
+            res = model.fit(**fit_args) 
             
-            print(self.full_y_data.shape, self.full_x_data.shape, self.full_model.exog.shape)
-            print('null preds...:' , yhat.isnull().sum())
+            #print('End FIT')
+            if self.predict:
+                yhat = self.predict(res, self.full_x_data.iloc[test_idx,:])
+            else:
+                yhat = res.predict(self.full_x_data.iloc[test_idx,:])
+            
+            #print(self.full_y_data.shape, self.full_x_data.shape, self.full_model.exog.shape)
+            #print('null preds...:' , yhat.isnull().sum())
 
             # record metrics
             
-            print(metrics)
+            #print(metrics)
             for score in metrics:
                 ytrue = self.full_y_data.iloc[test_idx]
                 ypred = yhat
@@ -807,13 +829,15 @@ class KFoldStatsmodels:
             mean = {k: np.mean(v) for k,v in exact.items()}
             std = {k: np.std(v) for k,v in exact.items()}
             params.append(res.params)
+            pvalues.append(res.pvalues)
 
 
             
             print('Fold:', i)
         
         params = pd.DataFrame(params)
-        out = {'exact': exact, 'mean': mean, 'std': std, 'params': params}
+        pvalues = pd.DataFrame(pvalues)
+        out = {'exact': exact, 'mean': mean, 'std': std, 'params': params, 'pvalues':pvalues}
         return out
 
         
