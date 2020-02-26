@@ -17,6 +17,7 @@ import re
 import warnings
 import pickle
 import copy
+from collections import defaultdict
 
 
 ###########################################
@@ -96,6 +97,44 @@ def load_pickle(path):
 def save_pickle(obj, path):
     with open(path, 'wb') as f:
         pickle.dump(obj, f, -1)
+
+
+
+# stolen verbatim from  https://github.ibm.com/vterpstra/CPD25_write_data_asset/blob/master/assets/jupyterlab/FileAccessTests.ipynb
+def list_file_hierarchy(startpath):
+    """Hierarchically print the contents of the folder tree, starting with the `startpath`.
+
+    Usage::
+
+        current_dir = os.getcwd()
+        parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+        parent_dir_2 = os.path.abspath(os.path.join(parent_dir, os.pardir))
+        list_file_hierarchy(parent_dir_2) #List tree starting at the grand-parent of the current directory
+
+
+    Args:
+        startpath (str): Root of the tree
+
+    Returns:
+        None
+
+    
+    Issue: return string optionally (to write to disk or search/regex through), 
+    maybe add a native grep like regex functionality
+
+    Issue: include option to only return directory structure not files.
+    """
+    import os
+    for root, dirs, files in os.walk(startpath):
+        level = root.replace(startpath, '').count(os.sep)
+        indent = ' ' * 4 * (level)
+        print('{}{}/'.format(indent, os.path.basename(root)))
+        subindent = ' ' * 4 * (level + 1)
+        for f in files:
+            print('{}{}'.format(subindent, f))
+
+
+
 
 ############################################
 ############ Model Evaluation
@@ -750,23 +789,27 @@ class KFoldStatsmodels:
     annoying if you use dict(k= v)
     '''
     
-    def __init__(self, metrics, n_splits=5, fit_args=None):
-
+    def __init__(self, metrics, n_splits=5, fit_args=None, predict=None):
+        '''
+        predict: Custom predict function that takes results obj and newdata df
+        '''
         # validate metrics
         metrics = metrics if isinstance(metrics, list) else [metrics]
         m_valid = {'acc': accuracy_score, 'roc':roc_auc_score, 'r2':r2_score, 'mae': mean_absolute_error}
         metrics = {n:f for n,f in m_valid.items() if n in metrics}
         if len(metrics) == 0:
             raise ValueError('Metrics must me one of {}'.format(m_valid.keys()))
-        m_res = {n:[] for n,f in metrics.items()}
 
 
-        self.m_res = m_res
         self.n_splits = n_splits
+        self.metrics = metrics
+        self.predict = predict
 
-    def model(self, model, endog, exog, from_formula=None, data=None **kwargs):
+    def model(self, model, *data_args, from_formula=None, data=None, **kwargs):
         '''
         from_formula: (formula str) if passed do not pass endog, exog but do pass data=.
+
+        *data_args: endog and exog, if from_formula=None
 
         **kwargs: other args to be passed to model init
 
@@ -774,24 +817,58 @@ class KFoldStatsmodels:
 
         Purpose: save model __init__ args
 
+        Issue: !!!! null ypreds and it changes each time.....
+        Issue: # !!!!!!!!!!important ... full model.endog shape is not same as input data.. rows.. were dropped
+        Issue: passing numpy arrays to api init method may cause issue with selector syntax consistency btw np and pd
         Issue: consider a check that model is subclass of statsmodel base estimator class
         Issue: move model arg to __init__?, honestly all of these args could be in init...
-        '''
+        Issue: consider (almost certainly should) two separete functions one for
+        from_formula, one from not.., model form_formual to __init__ and create
+        two internal build_model funcs one for each inputs/api, and decide which 
+        one to use from the from_formula switch
+        * Better: use fitting run switch, and a from_formula/api funcs, with true 
+        collect (formula, data, kwargs - for from_formula) (endog, exog, 
+        kwargs - for api), run the rest of the function identically
+        Issue: create check for categorical vs contiuous acc metrics, cirrently 
+        only continuoius
+        ''' 
         #record init vars for model (really buildmodel())
-        orig_init_args = vars()
+        #orig_init_args = vars()
+  
+        # don't pass on models self (internal namespace) and don't pass along 
+        # unused args i.e. tuples and dicts of zero len
+        env = vars() # so that orig_init_args is not itself in env
+        orig_init_args = {}
+        for k,v in env.items(): 
+            nonempty = True
+            if isinstance(v, (tuple, dict)):
+                nonempty = len(v)>0
+            if k != 'self' and nonempty:
+                orig_init_args[k] = v
+        #print(orig_init_args)
+        
         
         # make all numpy arrays pandas (for output interpretability) # distinguish series
-        orig_init_args.update({k: pd.DataFrame(v).squeeze() for k,v in orig_init_args if isinstance(v, np.ndarray)})  
+        #orig_init_args.update({k: pd.DataFrame(v).squeeze() for k,v in orig_init_args if isinstance(v, np.ndarray)})  
+        
 
         # try building the model, statsmodels will throw errors if any particular required args are missing.
-        full_model = self.build_model(**orig_init_args)
-        self.full_x_data = full_model.exog
-        self.full_y_data = full_model.endog
+        self.full_model = self.build_model(**orig_init_args)
+        
+        self.full_x_data = orig_init_args['data'] if 'data' in orig_init_args else orig_init_args['exog']
+        #print(type(self.full_x_data))
+        # hard coded, solve this problem of 'np.log(cost)' using patsy expansion
+        #self.full_y_data = orig_init_args['data'][self.full_model.endog_names] if 'data' in orig_init_args else orig_init_args['endog']
+        self.full_y_data = np.log(orig_init_args['data']['cost'])
+        # !!!!!!!!!!important ... full model.endog shape is not same as input data.. rows.. were dropped
+
 
         self.orig_init_args = orig_init_args
         self.model = model
+        self.from_formula = from_formula
 
-    def build_model(self, model, endog, exog, from_formula=None, data=None **kwargs)
+
+    def build_model(self, model, *data_args, from_formula=None, data=None, **kwargs):
         '''
         Purpose: initiate model
 
@@ -800,8 +877,14 @@ class KFoldStatsmodels:
         Issue: just update groups attr after if/else for formula? or create args dict for either and add to the dict in a single if c
         '''
 
+        try:  ## hacky , this unpacks kwargs into {'groups':'domainlower'}) to be unpacked again
+            kwargs = kwargs['kwargs']
+        except KeyError:
+            pass
+
         if from_formula is not None:
             # if no kwargs unpacking an empty dict... cool??
+            print('kwargs in build model:', kwargs)
             model = model.from_formula(from_formula, data=data, **kwargs) 
 
         else: # normal api
@@ -810,7 +893,7 @@ class KFoldStatsmodels:
         return model
         
 
-    def fit(self, **fit_args)
+    def fit(self, **fit_args):
         '''
         alternate: pass these args as fit_args to init_model, and fit and init in one go
         '''
@@ -819,11 +902,18 @@ class KFoldStatsmodels:
         #init_args = inspect.getfullargspec(type(model)).args
         #kwargs = {k:v for k,v in vars(model).items() if k in init_args and k not in ['exog', 'endog']}
         orig_init_args = self.orig_init_args
+        from_formula = self.from_formula
+        metrics = self.metrics
 
         fold_init_args = orig_init_args.copy() # shallow copy
-
+        
+        params = []
+        pvalues=[]
+        exact = defaultdict(list)
         kfold = KFold(shuffle=True, n_splits=self.n_splits)
-        for i, (test_idx, train_idx) in enumerate(kfold.split(x)):
+        for i, (train_idx, test_idx) in enumerate(kfold.split(self.full_x_data)):
+            #print('test shape:', test_idx.shape)
+            #print('train shape:', train_idx.shape)
 
             if from_formula is not None:
                 fold_init_args['data'] = orig_init_args['data'].iloc[train_idx,:]
@@ -834,24 +924,40 @@ class KFoldStatsmodels:
 
             ### groups= init arg... needs to be subset tooooooooooo (for mixedlm    )
             # hacky solution
-            if isinstance(model, sm.MixedLM):
+            if isinstance(self.model, sm.MixedLM):
                 fold_init_args['groups'] = orig_init_args['groups'].iloc[train_idx] 
         
-
-            model = build_model(**fold_init_args)
-            res = model.fit(**fit_args)
-            yhat = res.predict(self.full_x_data[test_idx,:])
+            model = self.build_model(**fold_init_args) 
+            res = model.fit(**fit_args) 
             
-            # record metrics
-            for n in metrics:
-                m_res[n].append(metrics[n](self.full_x_data[test_idx], np.round(yhat)))
-        #acc = accuracy_score(y[test_idx], np.round(yhat))
-            #accs.append(acc)
-            #roc = roc_auc_score(y[test_idx], np.round(yhat))
-            #rocs.append(roc)
-            print('Fold:', i)
+            #print('End FIT')
+            if self.predict:
+                yhat = self.predict(res, self.full_x_data.iloc[test_idx,:])
+            else:
+                yhat = res.predict(self.full_x_data.iloc[test_idx,:])
+            
+            #print(self.full_y_data.shape, self.full_x_data.shape, self.full_model.exog.shape)
+            #print('null preds...:' , yhat.isnull().sum())
 
-        return m_res
+            # record metrics
+            
+            #print(metrics)
+            for score in metrics:
+                ytrue = self.full_y_data.iloc[test_idx]
+                ypred = yhat
+                exact[score].append(metrics[score](ytrue , ypred)) # we 
+            mean = {k: np.mean(v) for k,v in exact.items()}
+            std = {k: np.std(v) for k,v in exact.items()}
+            params.append(res.params)
+            pvalues.append(res.pvalues)
+
+
+            
+            print('Fold:', i)
+        
+        params = pd.DataFrame(params)
+        pvalues = pd.DataFrame(pvalues)
+        out = {'exact': exact, 'mean': mean, 'std': std, 'params': params, 'pvalues':pvalues}
+        return out
 
         
-
