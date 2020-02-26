@@ -17,7 +17,6 @@ import re
 import warnings
 import pickle
 import copy
-from collections import defaultdict
 
 
 ###########################################
@@ -98,43 +97,6 @@ def save_pickle(obj, path):
     with open(path, 'wb') as f:
         pickle.dump(obj, f, -1)
 
-
-# stolen verbatim from  https://github.ibm.com/vterpstra/CPD25_write_data_asset/blob/master/assets/jupyterlab/FileAccessTests.ipynb
-def list_file_hierarchy(startpath):
-    """Hierarchically print the contents of the folder tree, starting with the `startpath`.
-
-    Usage::
-
-        current_dir = os.getcwd()
-        parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-        parent_dir_2 = os.path.abspath(os.path.join(parent_dir, os.pardir))
-        list_file_hierarchy(parent_dir_2) #List tree starting at the grand-parent of the current directory
-
-
-    Args:
-        startpath (str): Root of the tree
-
-    Returns:
-        None
-
-    
-    Issue: return string optionally (to write to disk or search/regex through), 
-    maybe add a native grep like regex functionality
-
-    Issue: include option to only return directory structure not files.
-    """
-    import os
-    for root, dirs, files in os.walk(startpath):
-        level = root.replace(startpath, '').count(os.sep)
-        indent = ' ' * 4 * (level)
-        print('{}{}/'.format(indent, os.path.basename(root)))
-        subindent = ' ' * 4 * (level + 1)
-        for f in files:
-            print('{}{}'.format(subindent, f))
-
-
-
-
 ############################################
 ############ Model Evaluation
 
@@ -212,13 +174,14 @@ def plot_roc_auc(ytrue, prob_pred):
     Issue: binary class only so far, refer to sklearn docs for multilabel example to mostly copy
 
     '''
+
     fpr, tpr, thresh = roc_curve(ytrue, prob_pred)
     auc_score = roc_auc_score(ytrue, prob_pred)
 
     #plt.figure()
     lw = 2
     plt.plot(fpr, tpr, color='darkorange',
-             lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
+                lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlim([-0.01, 1.0])
     plt.ylim([0.0, 1.01])
@@ -268,6 +231,20 @@ def write_json(dct, path, **kwargs):
         json.dump(dct, f, **kwargs)
 
 
+def integer_keys(dct):
+    '''
+    Convert any string dict keys that represent digits to int type
+
+    # for use as object_hook= in json.load()
+
+    # Issue: convert all single numerics (floats and negatives too) back, 
+    # numerics in lists and in values position are already converted
+    '''
+
+    if any(k.isdigit() for k in dct):
+        return {int(k) if k.isdigit() else k:v for k,v in dct.items()}
+    return dct
+
 
 
 # read json - read json from disk to memory
@@ -292,19 +269,7 @@ def read_json(path, **kwargs):
 
 
 
-def integer_keys(dct):
-# for use as object_hook= in json.load()
-
-# Issue: convert all single numerics (floats and negatives too) back, 
-# numerics in lists and in values position are already converted
-    if any(k.isdigit() for k in dct):
-        return {int(k) if k.isdigit() else k:v for k,v in dct.items()}
-    return dct
-
-
-
-
-def read_log_json(run_num=None, path='../logs/model logs (master file).json', object_hook=integer_keys):
+def read_log_json(run_num=None, logfile='../logs/model logs (master file).json', object_hook=integer_keys):
     '''
     Description: read entire log json into memory, optionally return only specific single 
     (or multiple) run logs
@@ -315,13 +280,13 @@ def read_log_json(run_num=None, path='../logs/model logs (master file).json', ob
 
     '''
 
-    outlog = read_json(path, object_hook=object_hook)
+    outlog = read_json(logfile, object_hook=object_hook)
     # all json keys (or all json keys and values? NO) must be str. I am 
     # assuming that keys can be converted by int()
     #outlog = {int(k): v for k,v in outlog.items()}
     if run_num is not None:
-        #outlog = {run_num: outlog[run_num]}
-        return outlog[run_num]
+        outlog = {run_num: outlog[run_num]} # for compatibilty with read_log_df expectations
+        #return outlog[run_num]
 
     return outlog
 
@@ -347,7 +312,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 
-def write_log_json(json_log, path='../logs/model logs (master file).json', **kwargs):
+def write_log_json(json_log, logfile='../logs/model logs (master file).json', **kwargs):
     '''
     Description: take a json log for a single (or multiple) runs, and .update() 
     master json log so that entries for that run number are overwritten
@@ -365,10 +330,10 @@ def write_log_json(json_log, path='../logs/model logs (master file).json', **kwa
     '''
     
 
-    if os.path.getsize(path) > 0: # if file in not empty 
-        #object_hook=interger_keys insures integer keys are converted into python ints
+    if os.path.getsize(logfile) > 0: # if file in not empty 
+        #object_hook=integer_keys insures integer keys are converted into python ints
         try:
-            master_log = read_json(path=path, object_hook=interger_keys) 
+            master_log = read_json(path=logfile, object_hook=integer_keys) 
             old_log = master_log.copy()
             master_log.update(json_log)
             empty=False
@@ -382,27 +347,27 @@ def write_log_json(json_log, path='../logs/model logs (master file).json', **kwa
     
 
     try:
-        write_json(master_log, path, **kwargs)
+        write_json(master_log, logfile, **kwargs)
     except TypeError as e:
             # Overwrite file just in case in raising error json wrote a partial, 
             # unreadable json string
         if not empty:
-            write_json(old_log, path, **kwargs)
+            write_json(old_log, logfile, **kwargs)
         else:
-            open(path,'wt').close() # earses file contents
+            open(logfile,'wt').close() # earses file contents
         raise type(e)('Failed to write JSON because non-json serializable type was passed.')
 
 
 
 
-def read_log_df(run_num=None, path='../logs/model logs (master file).json'):
+def read_log_df(run_num=None, logfile='../logs/model logs (master file).json'):
     '''
     issues:
     * use run_nums as index?
     * currently only supports selecting single not multiple run_nums
 
     '''
-    dct = read_log_json(run_num, path=path)
+    dct = read_log_json(run_num, logfile=logfile)
     df = json_normalize(list(dct.values()))
     df.index = dct.keys()
     df = df.dropna(axis=1, how='all')
@@ -539,6 +504,122 @@ def plot_pred_obsv(data, results_fittedvalues, *kwargs):
 
     return plt.gca()
 
+###############################################
+####### ML utils
+
+def xgb_optim(x_train, y_train, class_weight=None):
+    '''
+    Descrip: pass training data and get returned a xgb model fitted on training 
+    data with optimal hyper parameters. Hyper parameter search starts from fixed 
+    reasonable starting values.
+    '''
+
+    ## (1) Num iters optimize step
+    def num_iters_optim(alg, xgtrain):
+
+        eval_hist = xgb.cv(
+            alg.get_xgb_params(),
+            xgtrain,
+            num_boost_round= 1000,
+            nfold=5,
+            metrics='auc',
+            early_stopping_rounds=50,
+            verbose_eval=False
+            )
+        best_num_iters = eval_hist.shape[0]
+        alg.set_params(n_estimators = best_num_iters)
+        
+        display(pd.Series(alg.get_params()))
+        display(eval_hist.loc[best_num_iters-1, eval_hist.columns.isin(['test-auc-mean'])])
+
+        return alg
+
+    ## (2) Optimize other params step
+    def param_optim(alg, params):
+        
+        #cw = compute_sample_weight(class_weight='balanced', y=y_train)
+        cv = GridSearchCV(estimator=alg, param_grid = params, scoring='roc_auc', # 'accuracy',#
+        n_jobs=4, iid=False, cv=5, refit=False) # True) #
+        cv.fit(x_train, y_train)#, sample_weight=cw)
+        #alg = cv.best_estimator_
+        # set refit=False and do below to not retrain on whole set, to save time
+        alg.set_params(**cv.best_params_)
+
+        display(pd.DataFrame(cv.cv_results_)[['params','mean_test_score', 'std_test_score','rank_test_score']].sort_values('rank_test_score'))
+        display(pd.Series(alg.get_params()))
+
+        return alg
+
+
+    if class_weight == 'ratio_weight':
+        cw = np.divide.accumulate(np.unique(y_train, return_counts=True)[1])[1]
+    else:
+        cw = 1
+
+    # initialize model hyper params
+    alg = XGBClassifier(
+        learning_rate =0.1,
+        #n_estimators=1000,
+        max_depth=5,
+        min_child_weight=1,
+        gamma=0,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        objective= 'binary:logistic',
+        #nthread=4,
+        scale_pos_weight= cw,# 1, #
+        #seed=27
+        )
+
+    # xgb data format
+    xgtrain = xgb.DMatrix(x_train, label= y_train)
+
+    # get optimal num boosting iterations given fixed high learning rate 
+    # (for faster convergence during hyper param search fits) and reasonable 
+    # starting tree level parameters
+    alg = num_iters_optim(alg, xgtrain)
+
+    # max_depth & min_child_weight
+    params= {'max_depth':range(3,10,2), 'min_child_weight':range(1,6,2)}
+    alg = param_optim(alg, params)
+
+    md = alg.get_params()['max_depth']; mcw = alg.get_params()['min_child_weight']
+    params= {'max_depth':[md-1,md,md+1], 'min_child_weight':[mcw-1,mcw,mcw+1]}
+    alg = param_optim(alg, params)
+
+    # gamma
+    params= {'gamma':[i/10.0 for i in range(0,5)]}
+    alg = param_optim(alg, params)
+
+    # reset num iters
+    alg = num_iters_optim(alg, xgtrain)
+
+    # subsample and colsample_bytree 
+    params = {'subsample':[i/10.0 for i in range(6,10)], 'colsample_bytree':[i/10.0 for i in range(6,10)]}
+    alg = param_optim(alg, params)
+
+    ss= int(alg.get_params()['subsample']*100); csbt= int(alg.get_params()['colsample_bytree']*100)
+    params = {'subsample':[i/100.0 for i in range(ss-5,ss+10,5)], 'colsample_bytree':[i/100.0 for i in range(csbt-5,csbt+10,5)]}
+    alg = param_optim(alg, params)
+
+    # reg_alpha
+    params = {'reg_alpha':[0, 1e-5, 0.001, 0.005, 1e-2, 0.1, 1, 100]}
+    alg = param_optim(alg, params)
+
+    # final small learning rate
+    alg.set_params(learning_rate = 0.01)
+    alg = num_iters_optim(alg, xgtrain)
+
+    # fit optimal hyper parameters on full train data
+    alg.fit(x_train, y_train)
+
+    return alg
+
+
+
+
+
+
 
 
 ##################################################
@@ -669,27 +750,23 @@ class KFoldStatsmodels:
     annoying if you use dict(k= v)
     '''
     
-    def __init__(self, metrics, n_splits=5, fit_args=None, predict=None):
-        '''
-        predict: Custom predict function that takes results obj and newdata df
-        '''
+    def __init__(self, metrics, n_splits=5, fit_args=None):
+
         # validate metrics
         metrics = metrics if isinstance(metrics, list) else [metrics]
         m_valid = {'acc': accuracy_score, 'roc':roc_auc_score, 'r2':r2_score, 'mae': mean_absolute_error}
         metrics = {n:f for n,f in m_valid.items() if n in metrics}
         if len(metrics) == 0:
             raise ValueError('Metrics must me one of {}'.format(m_valid.keys()))
+        m_res = {n:[] for n,f in metrics.items()}
 
 
+        self.m_res = m_res
         self.n_splits = n_splits
-        self.metrics = metrics
-        self.predict = predict
 
-    def model(self, model, *data_args, from_formula=None, data=None, **kwargs):
+    def model(self, model, endog, exog, from_formula=None, data=None **kwargs):
         '''
         from_formula: (formula str) if passed do not pass endog, exog but do pass data=.
-
-        *data_args: endog and exog, if from_formula=None
 
         **kwargs: other args to be passed to model init
 
@@ -697,58 +774,24 @@ class KFoldStatsmodels:
 
         Purpose: save model __init__ args
 
-        Issue: !!!! null ypreds and it changes each time.....
-        Issue: # !!!!!!!!!!important ... full model.endog shape is not same as input data.. rows.. were dropped
-        Issue: passing numpy arrays to api init method may cause issue with selector syntax consistency btw np and pd
         Issue: consider a check that model is subclass of statsmodel base estimator class
         Issue: move model arg to __init__?, honestly all of these args could be in init...
-        Issue: consider (almost certainly should) two separete functions one for
-        from_formula, one from not.., model form_formual to __init__ and create
-        two internal build_model funcs one for each inputs/api, and decide which 
-        one to use from the from_formula switch
-        * Better: use fitting run switch, and a from_formula/api funcs, with true 
-        collect (formula, data, kwargs - for from_formula) (endog, exog, 
-        kwargs - for api), run the rest of the function identically
-        Issue: create check for categorical vs contiuous acc metrics, cirrently 
-        only continuoius
-        ''' 
+        '''
         #record init vars for model (really buildmodel())
-        #orig_init_args = vars()
-  
-        # don't pass on models self (internal namespace) and don't pass along 
-        # unused args i.e. tuples and dicts of zero len
-        env = vars() # so that orig_init_args is not itself in env
-        orig_init_args = {}
-        for k,v in env.items(): 
-            nonempty = True
-            if isinstance(v, (tuple, dict)):
-                nonempty = len(v)>0
-            if k != 'self' and nonempty:
-                orig_init_args[k] = v
-        #print(orig_init_args)
-        
+        orig_init_args = vars()
         
         # make all numpy arrays pandas (for output interpretability) # distinguish series
-        #orig_init_args.update({k: pd.DataFrame(v).squeeze() for k,v in orig_init_args if isinstance(v, np.ndarray)})  
-        
+        orig_init_args.update({k: pd.DataFrame(v).squeeze() for k,v in orig_init_args if isinstance(v, np.ndarray)})  
 
         # try building the model, statsmodels will throw errors if any particular required args are missing.
-        self.full_model = self.build_model(**orig_init_args)
-        
-        self.full_x_data = orig_init_args['data'] if 'data' in orig_init_args else orig_init_args['exog']
-        #print(type(self.full_x_data))
-        # hard coded, solve this problem of 'np.log(cost)' using patsy expansion
-        #self.full_y_data = orig_init_args['data'][self.full_model.endog_names] if 'data' in orig_init_args else orig_init_args['endog']
-        self.full_y_data = np.log(orig_init_args['data']['cost'])
-        # !!!!!!!!!!important ... full model.endog shape is not same as input data.. rows.. were dropped
-
+        full_model = self.build_model(**orig_init_args)
+        self.full_x_data = full_model.exog
+        self.full_y_data = full_model.endog
 
         self.orig_init_args = orig_init_args
         self.model = model
-        self.from_formula = from_formula
 
-
-    def build_model(self, model, *data_args, from_formula=None, data=None, **kwargs):
+    def build_model(self, model, endog, exog, from_formula=None, data=None **kwargs)
         '''
         Purpose: initiate model
 
@@ -757,14 +800,8 @@ class KFoldStatsmodels:
         Issue: just update groups attr after if/else for formula? or create args dict for either and add to the dict in a single if c
         '''
 
-        try:  ## hacky , this unpacks kwargs into {'groups':'domainlower'}) to be unpacked again
-            kwargs = kwargs['kwargs']
-        except KeyError:
-            pass
-
         if from_formula is not None:
             # if no kwargs unpacking an empty dict... cool??
-            print('kwargs in build model:', kwargs)
             model = model.from_formula(from_formula, data=data, **kwargs) 
 
         else: # normal api
@@ -773,7 +810,7 @@ class KFoldStatsmodels:
         return model
         
 
-    def fit(self, **fit_args):
+    def fit(self, **fit_args)
         '''
         alternate: pass these args as fit_args to init_model, and fit and init in one go
         '''
@@ -782,18 +819,11 @@ class KFoldStatsmodels:
         #init_args = inspect.getfullargspec(type(model)).args
         #kwargs = {k:v for k,v in vars(model).items() if k in init_args and k not in ['exog', 'endog']}
         orig_init_args = self.orig_init_args
-        from_formula = self.from_formula
-        metrics = self.metrics
 
         fold_init_args = orig_init_args.copy() # shallow copy
-        
-        params = []
-        pvalues=[]
-        exact = defaultdict(list)
+
         kfold = KFold(shuffle=True, n_splits=self.n_splits)
-        for i, (train_idx, test_idx) in enumerate(kfold.split(self.full_x_data)):
-            #print('test shape:', test_idx.shape)
-            #print('train shape:', train_idx.shape)
+        for i, (test_idx, train_idx) in enumerate(kfold.split(x)):
 
             if from_formula is not None:
                 fold_init_args['data'] = orig_init_args['data'].iloc[train_idx,:]
@@ -804,41 +834,24 @@ class KFoldStatsmodels:
 
             ### groups= init arg... needs to be subset tooooooooooo (for mixedlm    )
             # hacky solution
-            if isinstance(self.model, sm.MixedLM):
+            if isinstance(model, sm.MixedLM):
                 fold_init_args['groups'] = orig_init_args['groups'].iloc[train_idx] 
         
-            model = self.build_model(**fold_init_args) 
-            res = model.fit(**fit_args) 
-            
-            #print('End FIT')
-            if self.predict:
-                yhat = self.predict(res, self.full_x_data.iloc[test_idx,:])
-            else:
-                yhat = res.predict(self.full_x_data.iloc[test_idx,:])
-            
-            #print(self.full_y_data.shape, self.full_x_data.shape, self.full_model.exog.shape)
-            #print('null preds...:' , yhat.isnull().sum())
 
+            model = build_model(**fold_init_args)
+            res = model.fit(**fit_args)
+            yhat = res.predict(self.full_x_data[test_idx,:])
+            
             # record metrics
-            
-            #print(metrics)
-            for score in metrics:
-                ytrue = self.full_y_data.iloc[test_idx]
-                ypred = yhat
-                exact[score].append(metrics[score](ytrue , ypred)) # we 
-            mean = {k: np.mean(v) for k,v in exact.items()}
-            std = {k: np.std(v) for k,v in exact.items()}
-            params.append(res.params)
-            pvalues.append(res.pvalues)
-
-
-            
+            for n in metrics:
+                m_res[n].append(metrics[n](self.full_x_data[test_idx], np.round(yhat)))
+        #acc = accuracy_score(y[test_idx], np.round(yhat))
+            #accs.append(acc)
+            #roc = roc_auc_score(y[test_idx], np.round(yhat))
+            #rocs.append(roc)
             print('Fold:', i)
-        
-        params = pd.DataFrame(params)
-        pvalues = pd.DataFrame(pvalues)
-        out = {'exact': exact, 'mean': mean, 'std': std, 'params': params, 'pvalues':pvalues}
-        return out
+
+        return m_res
 
         
 
