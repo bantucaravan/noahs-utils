@@ -49,7 +49,7 @@ def fullcolwidth(df):
     with pd.option_context('display.max_colwidth', -1):#len(df)): # None did not work
         display(df)
         
-def show_group(grouped_df, idx=None):
+def get_group(grouped_df, idx=None):
     '''
     Return group from grouped df by group numeric index not label.
     Returns random group if no index is passed.
@@ -961,3 +961,7 @@ class KFoldStatsmodels:
         return out
 
         
+################################################################
+############# ibm cloud object storage utils
+
+
