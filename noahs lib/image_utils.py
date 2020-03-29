@@ -1,3 +1,5 @@
+
+
 from IPython.display import display
 import pandas as pd
 import numpy as np
@@ -21,9 +23,18 @@ from collections import defaultdict
 
 
 
+############################################
+##########  Image processing
 
-
-
-
-
-
+def plot_image(pixels, ax=None):
+    """
+    From https://raw.githubusercontent.com/hellodanylo/ucla-deeplearning/master/02_cnn/utils.py
+    Simply plots an image from its pixels.
+    Pixel values must be either integers in [0, 255], or floats in [0, 1].
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.imshow(pixels)
+    ax.axis('off')
+    return ax
+    #plt.show()
