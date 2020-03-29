@@ -1,0 +1,1 @@
+A repository of various functions and classes that I find useful across many projects.
