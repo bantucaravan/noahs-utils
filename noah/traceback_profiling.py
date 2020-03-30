@@ -28,6 +28,22 @@ make context manager
 
 #### The class / context
 class profile:
+    '''
+
+    timing note: some implrecision due to this being system time and 
+    due to the profiling code (like print() etc) also taking up time 
+    that is counted toward the original code....
+    
+    Issue: allow sum of time at each level i.e. time on level and time on 
+    level and every level beneath
+
+    Issue: save sys.stdout and replace with file, during call so that 
+    I don't have to specify file= in every print call
+
+    Issue: kill len(self.level_start) by adding some extra enter at 
+    start before __enter__ exit
+    '''
+    
     def __init__(self, file=sys.stdout):
         '''
         file: (str or file-like)
@@ -35,13 +51,6 @@ class profile:
 
         dev note: only .seekable() file-likes are closed at teh end. Possibly
          future explicity close all but stdout/in/err
-
-        timing note: some implrecision due to this being system time and 
-        due to the profiling code (like print() etc) also taking up time 
-        that is counted toward the original code....
-        
-        Issue: save sys.stdout and replace with file, during call so that 
-        I don't have to specify file= in every print call
         '''
         self.level = 0
         if isinstance(file, str):
@@ -57,8 +66,6 @@ class profile:
             self.level += 1
             print("-" * self.level + "> call function", file=self.file)
             print(frame.f_code.co_filename, frame.f_code.co_name,file=self.file)
-            # list as stack more efficeint?
-            #self.level_start[self.level] = self.clock() # dict del
             self.level_start.append(self.clock())
         #if (event == "c_call"):
         #    self.level += 1
@@ -69,13 +76,13 @@ class profile:
             print(frame.f_code.co_filename, frame.f_code.co_name,file=self.file)
             # for profile start on exit - is try catch faster?
             if len(self.level_start) > 0:
-                #elapsed = self.clock() - self.level_start[self.level] # dict del
-                elapsed = self.clock() - self.level_start.pop()
+                #elapsed = self.clock() - (self.level_start.pop() + self.total_elapsed) # failed attempt to caputre both
+                elapsed = self.clock() - self.level_start.pop() # old but beautiful
                 # remove time spent on child level from all parent levels
-                self.level_start = [ts + elapsed for ts in self.level_start]
-                #self.level_start[self.level - 1] += elapsed # dict del
-                print(' -- took %s (hh:mm:ss)' %(dt.timedelta(seconds=elapsed)), file=self.file)
+                self.level_start = [ts + elapsed for ts in self.level_start] # old but beautiful
                 self.total_elapsed += elapsed
+                print(' -- took %s (hh:mm:ss)' %(dt.timedelta(seconds=elapsed)), file=self.file)
+                
             self.level -= 1
             #print(<time spent in func since call exclued>)
         #return self.tracefunc # why???
