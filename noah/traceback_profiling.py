@@ -3,6 +3,8 @@
 #from contextlib import redirect_stdout
 #import io
 import sys
+import datetime as dt
+import timeit
 #import threading
 
 
@@ -33,19 +35,31 @@ class profile:
 
         dev note: only .seekable() file-likes are closed at teh end. Possibly
          future explicity close all but stdout/in/err
+
+        timing note: some implrecision due to this being system time and 
+        due to the profiling code (like print() etc) also taking up time 
+        that is counted toward the original code....
+        
+        Issue: save sys.stdout and replace with file, during call so that 
+        I don't have to specify file= in every print call
         '''
         self.level = 0
-
         if isinstance(file, str):
             open(file, 'w').close() # truncate file
             file = open(file, 'at')
         self.file = file
+
+        self.clock = timeit.default_timer
+        self.level_start = []
 
     def tracefunc(self,frame, event, arg):
         if (event == "call"):
             self.level += 1
             print("-" * self.level + "> call function", file=self.file)
             print(frame.f_code.co_filename, frame.f_code.co_name,file=self.file)
+            # list as stack more efficeint?
+            #self.level_start[self.level] = self.clock() # dict del
+            self.level_start.append(self.clock())
         #if (event == "c_call"):
         #    self.level += 1
         #    print("-" * self.level + "> c_call function", file=self.file)
@@ -53,17 +67,36 @@ class profile:
         elif event == "return":
             print("<" + "-" * self.level, "exit function",file=self.file)
             print(frame.f_code.co_filename, frame.f_code.co_name,file=self.file)
+            # for profile start on exit - is try catch faster?
+            if len(self.level_start) > 0:
+                #elapsed = self.clock() - self.level_start[self.level] # dict del
+                elapsed = self.clock() - self.level_start.pop()
+                # remove time spent on child level from all parent levels
+                self.level_start = [ts + elapsed for ts in self.level_start]
+                #self.level_start[self.level - 1] += elapsed # dict del
+                print(' -- took %s (hh:mm:ss)' %(dt.timedelta(seconds=elapsed)), file=self.file)
+                self.total_elapsed += elapsed
             self.level -= 1
             #print(<time spent in func since call exclued>)
         #return self.tracefunc # why???
 
+    def _secs_to_str(self, sec):
+        """Convert timestamp to h:mm:ss string.
+        :param sec: Timestamp.
+        """
+        return str(dt.datetime.fromtimestamp(sec))
+
+
 
     def __enter__(self):
         sys.setprofile(self.tracefunc)
+        self.total_elapsed = 0
+        self.total_net = self.clock()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.setprofile(None)
+        self.total_net = self.clock() - self.total_net 
         if self.file.seekable(): # excludes sys.stdout
             self.file.close()
 
