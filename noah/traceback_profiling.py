@@ -19,10 +19,9 @@ make context manager
 #https://stackoverflow.com/questions/8315389/how-do-i-print-functions-as-they-are-called
 #https://docs.python.org/2/library/inspect.html # for details
 # https://docs.python.org/3/library/sys.html#sys.setprofile # for details
-
 # for the timing part https://stackoverflow.com/a/28218696
 
-
+# https://docs.python.org/3/library/debug.html see for overview of profiling in base python
 
 #keep track by level, and associate each call with a level
 
@@ -32,8 +31,12 @@ class profile:
 
     timing note: some implrecision due to this being system time and 
     due to the profiling code (like print() etc) also taking up time 
-    that is counted toward the original code....
+    that is counted toward the original code.... maybe assign the 
+    differences as a var and adjust in "call" not return?
     
+    Issue: think of a more effcient way to record single level and all 
+    contained levels eleapsed times. not two howl list with double pops and appends
+
     Issue: allow sum of time at each level i.e. time on level and time on 
     level and every level beneath
 
@@ -59,14 +62,18 @@ class profile:
         self.file = file
 
         self.clock = timeit.default_timer
+        # level_start use the 'stack' concept
         self.level_start = []
+        self.level_start_adj = [] # adjusted start times
 
     def tracefunc(self,frame, event, arg):
         if (event == "call"):
             self.level += 1
             print("-" * self.level + "> call function", file=self.file)
             print(frame.f_code.co_filename, frame.f_code.co_name,file=self.file)
-            self.level_start.append(self.clock())
+            start = self.clock()
+            self.level_start.append(start)
+            self.level_start_adj.append(start)
         #if (event == "c_call"):
         #    self.level += 1
         #    print("-" * self.level + "> c_call function", file=self.file)
@@ -77,12 +84,16 @@ class profile:
             # for profile start on exit - is try catch faster?
             if len(self.level_start) > 0:
                 #elapsed = self.clock() - (self.level_start.pop() + self.total_elapsed) # failed attempt to caputre both
-                elapsed = self.clock() - self.level_start.pop() # old but beautiful
+                end = self.clock()
+                elapsed_net = end - self.level_start.pop() # old but beautiful
+                elapsed = end - self.level_start_adj.pop()
                 # remove time spent on child level from all parent levels
-                self.level_start = [ts + elapsed for ts in self.level_start] # old but beautiful
-                self.total_elapsed += elapsed
-                print(' -- took %s (hh:mm:ss)' %(dt.timedelta(seconds=elapsed)), file=self.file)
-                
+                self.level_start_adj = [ts + elapsed for ts in self.level_start_adj] # old but beautiful
+                t_net = dt.timedelta(seconds=elapsed_net)
+                t = dt.timedelta(seconds=elapsed)
+                print(' -- took %s gross; %s exclusive (hh:mm:ss)' 
+                %(t_net, t), file=self.file)
+                self.total_elapsed += elapsed                    
             self.level -= 1
             #print(<time spent in func since call exclued>)
         #return self.tracefunc # why???
