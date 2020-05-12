@@ -34,6 +34,12 @@ from collections import defaultdict
 
 # fix 8 space default
 
+'''
+ISSUE: consider checking what frame/scope layer the func is at and if not 
+top level returning the option config string that can be taken by the outer 
+func and applied ala allrows(fullcolwidth(df))
+'''
+
 def allcols(df, rows=False):
     with pd.option_context('display.max_columns', df.shape[-1]):
         display(df)
@@ -92,6 +98,12 @@ def sort_dict(dicti, reverse=True):
     out = {k: v for k, v in sorted(dicti.items(), key=lambda item: item[1], reverse=reverse)}
     return out
 
+# https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-and-checking-how-many-key-value-pairs-are-equal
+def dict_compare(dct1, dct2):
+    shared_items = {k: dct1[k] for k in dct1 if k in dct2 and dct1[k] == dct2[k]}
+    print(len(shared_items) == len(dct1))
+    return shared_items
+
 def load_pickle(path):
     with open(path, 'rb') as f:
         out = pickle.load(f)
@@ -121,7 +133,8 @@ def list_file_hierarchy(startpath):
     Returns:
         None
 
-    
+    Issue: what about `tree` command in bash? doesn'ot do this for you?
+
     Issue: return string optionally (to write to disk or search/regex through), 
     maybe add a native grep like regex functionality
 
@@ -137,9 +150,86 @@ def list_file_hierarchy(startpath):
             print('{}{}'.format(subindent, f))
 
 
+if False:
+    # JSON selection
+    # come back......
+    # Version: input: list of dicts - select dict key and return if any dict key matches (name: json_select(key=, value=)?)
+    
+    def json_select(json, key='name', value=None):
+        # pd version
+        pd.io.json.json_normalize(json)[key].tolist()
+        # base version
+        a = [i for i in a if i['name'] == collection_name]
+        if len(a)==1:
+            return a[0]
+
+
+#Version: input list of dicts, return list where each element is the value from a given dict at selected dict key, add optional check to make sure all dicts have key
+def json_select(key, json):
+    '''
+    json: (list of dict)
+    '''
+    # pd version
+    pd.io.json.json_normalize(json)[key].tolist()
+    # base version
+    [i[key] for i in json]
+
+    return
+
+    json = r['collections']
+    key='name'
+    op = '=='
+    val =  collection_name
+
+    df = pd.io.json.json_normalize(json)
+    df.loc[df['name'] == collection_name, 'collection_id']
+    if len() == 1:
+        pass
+        #.item()
 
 
 
+class JSONQuery(pd.DataFrame):
+    #'''
+    #issue: allow it to reduce to series like real df..
+    #'''
+    def __init__(self, json, select=None):
+        # add list of dict validation
+        if isinstance(json, list):
+            json = pd.io.json.json_normalize(json)
+            df = json.copy() # orig df
+            super().__init__(df)
+            self.df =df
+        else:
+            super().__init__(json)
 
 
+        if select:
+            self.select(select)
 
+
+    def select(self,key):
+        # return series as modified df (i.e. jsonquery obj)
+        out =  type(self)(self[key])
+        out.df = self.df
+        if len(out) == 1:
+            return out.values[0][0]
+        return out
+        
+    def filter(self, key, op, val):
+        # assumes self is a series
+        mask = eval(f'self.df["{key}"] {op} "{val}"')
+        out = type(self)(self.loc[mask,:])
+        out.df = self.df
+        if len(out) == 1:
+            return out.values[0][0]
+        return out
+
+
+'''
+#Tests
+
+a =JSONQuery(json)
+a.select('collection_id').filter('name', '==', collection_name)
+
+'''

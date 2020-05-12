@@ -13,18 +13,97 @@ from sklearn.model_selection import KFold
 import inspect
 import json
 import os
+import sys
 import re
 import warnings
 import pickle
 import copy
 from collections import defaultdict
 
+'''
+Consider converting the statsmodels estimator class into a sklearn estimator, 
+and then just using the cross_validate() sklearn function...
+
+'''
 
 
 
 
 ##################################################
 ################## statsmodels utils
+
+
+def predict_re(results, newdata, groups_col=None):
+
+    assert isinstance(results, sm.regression.mixed_linear_model.MixedLMResultsWrapper)
+
+    yhat = results.predict(newdata)
+
+    # ISSUE: fix logoc of none vs differnt than init arg
+    groups = results.model._get_init_kwds()['groups']
+    if isinstance(groups, str):
+        groups_col = groups
+
+    # results.random_effects is a dict of k=col name, v= 1x1 pd.series of random effect size
+    # .item() gets the raw float
+    re = {k:v.item() for k,v in results.random_effects.items()}
+    re = newdata[groups_col].map(re)
+    
+    #ISSUE: deal if there were already nulls in newdata[groups_col]
+    if re.isnull().sum() > 0:
+        print(f'There are {re.isnull().sum()} new categories in "{groups_col}".'
+               ' Setting their random intercepts to 0...', file=sys.stderr)
+    
+    # if unobserved groups are in test set, set random effect to 0
+    re = re.fillna(0) 
+    yhat = yhat + re
+    return yhat
+
+'''
+# TEST
+
+assert all(fittedmodel.fittedvalues == predict_re(fittedmodel, data_train, 'grouper'))
+
+'''
+
+
+
+
+def predict_unobserved(results, x_data, cp_formula='np.log(cost) ~ month_int + post_ge_start'):
+    '''
+    # fit complete pooling model to predict unobserved cases
+    # hardcoded for this usecase and my Kfold func
+    
+    cp_formula: formula of complete pooling fit specification, to use for
+    prediction for cases when unobserved domains appear in test set
+    '''
+    
+    #print('train params:', results.params.shape)
+    train_domains = results.params.index.str.extract(r'\[T.(.+)\]').dropna().squeeze()
+    is_observed = x_data.domainlower.isin(train_domains)
+    yhat = pd.Series(index=x_data.index, dtype='float64')
+    yhat.loc[is_observed] = results.predict(x_data.loc[is_observed, :])
+    print('domains not in test:', (~is_observed).sum())
+    #print('test size:', x_data.shape)
+    
+    # Hardcoded chunk
+    # complete pooling (cp) model
+    fold_init_args = inspect.currentframe().f_back.f_locals['fold_init_args'].copy()
+    self = inspect.currentframe().f_back.f_locals['self']
+    fit_args = inspect.currentframe().f_back.f_locals['fit_args'].copy()
+    #print(fold_init_args)
+    fold_init_args['from_formula'] = cp_formula
+    cp_model = self.build_model(**fold_init_args) 
+    cp_res = cp_model.fit(**fit_args)  
+    #print('params',cp_res.params.index)
+    #print(cp_res.model.formula)
+    yhat.loc[~is_observed] = cp_res.predict(x_data.loc[~is_observed, :])
+
+    return yhat
+
+
+
+
 
 
 def old_kfold_statsmodels(model, metrics, n_splits=5, fit_args=None):
@@ -321,3 +400,5 @@ class KFoldStatsmodels:
         pvalues = pd.DataFrame(pvalues)
         out = {'exact': exact, 'mean': mean, 'std': std, 'params': params, 'pvalues':pvalues}
         return out
+
+

@@ -92,29 +92,18 @@ def pretty_cm(y_true, y_pred):
     return cm
 
 
-def plot_roc_auc(ytrue, prob_pred):
+
+
+def gridsearch_display(cv):
     '''
-    mostly from copied form sklearn docs
+    Description: show results of sklearn GridSearchCV as dataframe.
 
-    Issue: binary class only so far, refer to sklearn docs for multilabel example to mostly copy
+    Params:
+        cv: (fitted GridSearchCV obj)
 
     '''
-
-    fpr, tpr, thresh = roc_curve(ytrue, prob_pred)
-    auc_score = roc_auc_score(ytrue, prob_pred)
-
-    #plt.figure()
-    lw = 2
-    plt.plot(fpr, tpr, color='darkorange',
-                lw=lw, label='ROC curve (area = %0.2f)' % auc_score)
-    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-    plt.xlim([-0.01, 1.0])
-    plt.ylim([0.0, 1.01])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic\nArea Under Curve')
-    plt.legend(loc="lower right")
-    plt.gca().set_aspect('equal', 'box')
-    #plt.show()
-
-    return plt.gca()
+    #display(pd.DataFrame(cv.cv_results_)[['params','mean_test_score', 'std_test_score','rank_test_score']].sort_values('rank_test_score'))
+    df = pd.DataFrame(cv.cv_results_)
+    select_cols = lambda i: i.startswith('params') or i.startswith('mean_test_') or i.startswith('std_test_') or i.startswith('rank_test_')
+    cols = [i for i in df.columns if select_cols(i)]
+    return df[cols]

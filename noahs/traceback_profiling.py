@@ -34,6 +34,8 @@ class profile:
     that is counted toward the original code.... maybe assign the 
     differences as a var and adjust in "call" not return?
     
+    Issue: set pruning so that it only prints calls down to the nth level
+
     Issue: think of a more effcient way to record single level and all 
     contained levels eleapsed times. not two howl list with double pops and appends
 
