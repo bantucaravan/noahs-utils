@@ -44,19 +44,6 @@ def save_json(dct, path, **kwargs):
         json.dump(dct, f, **kwargs)
 
 
-def integer_keys(dct):
-    '''
-    Convert any string dict keys that represent digits to int type
-
-    # for use as object_hook= in json.load()
-
-    # Issue: convert all single numerics (floats and negatives too) back, 
-    # numerics in lists and in values position are already converted
-    '''
-
-    if any(k.isdigit() for k in dct):
-        return {int(k) if k.isdigit() else k:v for k,v in dct.items()}
-    return dct
 
 
 
@@ -74,10 +61,28 @@ def load_json(path, **kwargs):
     return dct
 
 
+
+def integer_keys(dct):
+    '''
+    For use as an argument for object_hook= in json.load(), to convert 
+    (i.e. decoded) any json dict keys that represent digits but were 
+    serialized as strings (as per the json standard) back into int type
+
+
+    # Issue: convert all single numerics (floats and negatives too) back, 
+    # numerics in lists and in values position are already converted
+    '''
+
+    if any(k.isdigit() for k in dct):
+        return {int(k) if k.isdigit() else k:v for k,v in dct.items()}
+    return dct
+
+
+
 class NumpyJSONEncoder(json.JSONEncoder):
     '''
-    for use in converting non-json serializable obj types into json serializable 
-    types in write_log_json()
+    Called during json.dump to convert non-json serializable obj (particularly 
+    numpy objs) types to json serializable types
 
     See for explanation: https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable
    
@@ -85,14 +90,20 @@ class NumpyJSONEncoder(json.JSONEncoder):
     
     
     '''
-    def default(self, obj):
+    def default(self, obj):        
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, np.number):
             return obj.item()
-        else: # is this too broad...?
+        elif isinstance(obj, (pd.Series, pd.Index)):
+            return np.array(obj).tolist()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict()
+        else: # is this too broad...?            
             return str(obj)
         return json.JSONEncoder.default(self, obj)
+        # why not!!!! no good reason I think
+        #return super().default(self, obj)
 
 
 
@@ -288,8 +299,8 @@ class JSONExperimentLogger:
         # all json keys (or all json keys and values? NO) must be str. I am 
         # assuming that keys can be converted by int()
         #outlog = {int(k): v for k,v in outlog.items()}
-        if (run_id is not None) & (out=='json'):
-            outlog = {run_num: outlog[run_num]} # for compatibilty with read_log_df expectations
+        if (run_id is not None):
+            outlog = {run_id: outlog[run_id]} # for compatibilty with read_log_df expectations
             #return outlog[run_num]
 
         if out == 'df':
