@@ -11,6 +11,7 @@ import re
 import numbers
 import itertools
 from collections import defaultdict
+import datetime as dt
 
 from noahs.general_utils import save_pickle, load_pickle
 
@@ -64,8 +65,8 @@ def load_json(path, **kwargs):
 
 def integer_keys(dct):
     '''
-    For use as an argument for object_hook= in json.load(), to convert 
-    (i.e. decoded) any json dict keys that represent digits but were 
+    For use as value for object_hook= parameter in json.load(), to convert 
+    (i.e. decode) any json dict keys that represent digits but were 
     serialized as strings (as per the json standard) back into int type
 
 
@@ -81,8 +82,8 @@ def integer_keys(dct):
 
 class NumpyJSONEncoder(json.JSONEncoder):
     '''
-    Called during json.dump to convert non-json serializable obj (particularly 
-    numpy objs) types to json serializable types
+    value for parameter cls= in json.dump, to convert non-json serializable 
+    obj (particularly numpy objs) types to json serializable types.
 
     See for explanation: https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable
    
@@ -198,6 +199,13 @@ class JSONExperimentLogger:
     run id must be set by calling (and only possible by calling!? or 
     specifying in .update_log() ) .set_run_id() before updating the log 
     with .update_log()
+
+
+    Issue: # update the log from tabular format (i.e array of value at indexed 
+    by speciifc paths of keys update)... maybe easier with mongodb...)
+
+
+    Issue: de
     '''
 
 
@@ -269,6 +277,12 @@ class JSONExperimentLogger:
         assert isinstance(run_id, int)
         self.run_id = run_id
 
+        #start run timestamp
+        now = dt.datetime.now().replace(microsecond=0).isoformat(' ')
+        self.update_log({'timestamp': now})
+
+
+
     def end_run(self):
         '''
         set run_id to None, so that further calls of .update_log() do not
@@ -277,13 +291,17 @@ class JSONExperimentLogger:
         self.run_id = None
         
 
-    def load_log(self, run_id=None ,object_hook=integer_keys, out='json'):
+    def load_log(self, run_id=None ,object_hook=integer_keys, out='json', **kwargs):
         '''
         Description: read entire log json into memory, optionally return only specific single 
         (or multiple) run logs
 
         Params:
-            return: (str) 'json' or 'df'
+            out: (str) 'json' or 'df'
+
+            **kwargs: passed to pd.json_normalize
+
+
 
         Issues:
         * valudate .json file ext?
@@ -295,16 +313,23 @@ class JSONExperimentLogger:
 
         '''
 
+        # All JSON keys must be JSON string objects. integer_keys() as the 
+        # object_hook converts all JSON key strings that represent integers 
+        # into python int objects rather than str objects 
+        # as would be default json.load() result
+             
+        if out=='df': 
+            # leave integer keys as strings for compatibility with expected 
+            # format of pd.json_normalize()
+            object_hook=None
+        
         outlog = load_json(self.logfile, object_hook=object_hook)
-        # all json keys (or all json keys and values? NO) must be str. I am 
-        # assuming that keys can be converted by int()
-        #outlog = {int(k): v for k,v in outlog.items()}
-        if (run_id is not None):
+        if isinstance(run_id, int):
             outlog = {run_id: outlog[run_id]} # for compatibilty with read_log_df expectations
             #return outlog[run_num]
 
         if out == 'df':
-            df = json_normalize(list(outlog.values()))
+            df = json_normalize(list(outlog.values()), **kwargs)
             df.index = outlog.keys()
             df = df.dropna(axis=1, how='all')
             return df
@@ -365,7 +390,7 @@ class JSONExperimentLogger:
         # incase run_id does not exist yet in master_log
         master_log = defaultdict(dict, master_log)
     
-        if run_id:
+        if run_id is not None: # allow 0
             # assumes json_log does not include run_id
             master_log[run_id].update(json_log)
         else:
@@ -413,7 +438,7 @@ class JSONExperimentLogger:
         return new_log
 
     @safe_update_log
-    def delete_run(self, run_id, master_log=None):
+    def delete_runs(self, run_id, master_log=None):
         '''
         Description: delete entire run log....
 
@@ -484,7 +509,7 @@ from nbrun_git_clone.nbrun import run_notebook
 # original repo https://github.com/tritemio/nbrun
 
 def run_nb(kw_variants, base_nb, save_html=False, save_ipynb=False,
-outname_func=None, savedir=os.getcwd(), timeout=60*60*6):
+outname_func=None, savedir=os.getcwd(), combine='prod', timeout=60*60*6):
     '''
     Description: run variants of keyward on a notebook
     
@@ -496,16 +521,29 @@ outname_func=None, savedir=os.getcwd(), timeout=60*60*6):
         outname: (callable) should take nb_kwargs dict (each iteration) and 
         return a string.
 
+        combine:(str) if combine=='prod' the outer product (every combination, like nested for-loops) of all values in every kw list will be run in the notebook. If combine=='zip', kw list must all be of equal length (or length 1 to be broadcast) the lists will be zipped and the combinations at each index position will be passed to the notebook. 
+
         timeout: (int) seconds to wait for nb to run before throwing
         timeout error
 
-    Issue: # what about nb args that are constant every time? (I can 
-    still add to the inputs to product..)
+    Issue: Add a try/catch??? so you don't stop if one config fails and 
+    you can go back to it..
 
     '''
     print(savedir)
     #kw_dict
-    for values in itertools.product(*kw_variants.values()):
+    
+    if combine == 'prod':
+        variants = itertools.product(*kw_variants.values())
+    elif combine == 'zip':
+        lens = np.unique([len(i) for i in kw_variants.values() if len(i) != 1])
+        assert lens.shape[0] == 1, \
+        'All lists of variants must be equal length (or length of 1).'
+        # expand value lenght from 1 to given len, for len==1 value lists
+        kw_variants = {k: v*lens[0] if len(v)==1 else v for k,v in kw_variants.items()}
+        variants = zip(*kw_variants.values())
+
+    for values in variants:
         nb_kwargs = dict(zip(kw_variants.keys(), values))
 
         outname=''

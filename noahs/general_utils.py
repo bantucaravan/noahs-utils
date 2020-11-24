@@ -57,7 +57,27 @@ allrowscols = allcolsrows
 def fullcolwidth(df):
     with pd.option_context('display.max_colwidth', -1):#len(df)): # None did not work
         display(df)
-        
+
+def full(df, *opts):
+    '''
+    Params:
+        *opts: (strs) specifying what kind of display options wanted. See func for options.
+    '''
+
+    args=[]
+    if 'rows' in opts:
+        args.extend(['display.max_rows', df.shape[0]])
+    if 'cols' in opts:
+        args.extend(['display.max_columns', df.shape[-1]])
+    if 'width' in opts:
+        args.extend(['display.max_colwidth', -1])
+    if len(args) == 0:
+        raise ValueError('display options must be one or more of ["rows", "cols", "width"]')
+
+    with pd.option_context(*args):
+        display(df)
+
+
 def get_group(grouped_df, idx=None):
     '''
     Return group from grouped df by group numeric index not label.
