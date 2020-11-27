@@ -2,7 +2,7 @@ import setuptools
 
 
 setuptools.setup(
-    name="noahs"
+    name="noahs",
     version="0.0.1",
     author="Noah Chasek-Macfoy",
     author_email="bantucaravan@gmail.com",
