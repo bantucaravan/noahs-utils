@@ -331,6 +331,7 @@ class JSONExperimentLogger:
         if out == 'df':
             df = json_normalize(list(outlog.values()), **kwargs)
             df.index = outlog.keys()
+            df.index = df.index.astype(int) # return integer (run id) keys to int dtype after their conversion to strings by json serialization.
             df = df.dropna(axis=1, how='all')
             return df
 
