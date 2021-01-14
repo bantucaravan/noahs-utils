@@ -504,10 +504,9 @@ def try_args(arg_dict, method):
 
 
 
-# location of nbrun_git_clone
-sys.path.append("/Users/noah.chasek-macfoy@ibm.com/Desktop/projects/Drone proj/code/")
-from nbrun_git_clone.nbrun import run_notebook
-# original repo https://github.com/tritemio/nbrun
+
+# noahs.nbrun was downloaded with wget https://raw.githubusercontent.com/tritemio/nbrun/master/nbrun.py
+from noahs.nbrun import run_notebook
 
 def run_nb(kw_variants, base_nb, save_html=False, save_ipynb=False,
 outname_func=None, savedir=os.getcwd(), combine='prod', timeout=60*60*6):
