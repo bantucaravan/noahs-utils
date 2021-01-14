@@ -7,7 +7,7 @@ setuptools.setup(
     author="Noah Chasek-Macfoy",
     author_email="bantucaravan@gmail.com",
     description="Data Science tools I like to use.",
-    #url="https://github.com/pypa/sampleproject",
+    url="https://github.com/bantucaravan/noahs-utils",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -15,4 +15,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
+    install_requires=[
+        "nbrun @ git+https://github.com/tritemio/nbrun"
+    ]
 )
