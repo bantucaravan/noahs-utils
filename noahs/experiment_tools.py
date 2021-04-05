@@ -12,6 +12,7 @@ import numbers
 import itertools
 from collections import defaultdict
 import datetime as dt
+import functools
 
 from noahs.general_utils import save_pickle, load_pickle
 
@@ -23,8 +24,6 @@ from noahs.general_utils import save_pickle, load_pickle
 ############### experiment logging Management utils 
 
 #NB: alternative for all of this is the existing mlflow logging module
-
-
 
 
 
@@ -127,7 +126,7 @@ def safe_update_log(update_func):
     `master_log` (in self(future) or passed as arg (current)), make 
     modifications to `master_log` and return modified `master_log`
     '''
-
+    @functools.wraps
     def inner_func(self, *args, **kwargs):
         '''
         deal with redundent loading and saving of the log
@@ -558,3 +557,56 @@ outname_func=None, savedir=os.getcwd(), combine='prod', timeout=60*60*6):
                     timeout=timeout,
                     nb_kwargs=nb_kwargs)
         print('Completed:',nb_kwargs)
+
+
+import git
+from pathlib import Path
+# _dh[0] is the working dir the notebook was opened into 
+# path=_dh[0]
+# path = "/Users/noah.chasek-macfoy@ibm.com/Desktop/projects/Noah's Utils [git repo]/noahs/experiment_tools.py"
+# run_id=1
+def git_snapshot(path, run_id):
+    '''
+    Auto-commit any outstanding modifications in the repo. Only previously 
+    tracked files will be added to the auto-commit.
+
+    Params:
+        path: path from which to search (upwards) for an encasing git repo. 
+        Path must tracked by the git repo, and thus must be a file.
+    '''
+    # Experiment Architecture:
+    # could it be that the mlflow hands off applorach works best for py file 
+    # experiments (where no code changes during the experiment run, thus making an 
+    # auto commit less useful), maybe I should move away from notebooks for running 
+    # my HPO experiments? 
+
+    # get repo containing file/nb
+    repo = git.Repo(path, search_parent_directories=True)
+
+    # assert that the nb/file is in most recent commit (better to explicitly 
+    # check paths in commit?)
+    path = Path(path)
+    assert path.is_file()
+    assert str(path.resolve().relative_to(repo.working_tree_dir)) not in repo.untracked_files
+
+    # add --update all previously added but modified files to index
+    # slightly different than git add -u (which adds path deletions and path 
+    # modifications)
+    diffs = repo.head.commit.diff(None)
+    modified = []
+    for file_diff in diffs.iter_change_type('M'):
+        # unecessary for 'M' change type, remove and make into comprehension?
+        assert file_diff.a_path == file_diff.b_path 
+        modified.append(file_diff.b_path)
+
+    # commit outstanding modifications with special message header
+    if len(modified) > 0:
+        index = repo.index
+        index.add(modified)
+        commit = index.commit('[AUTO-SAVE] experiment with run id %s' %(run_id))
+        return commit.hexsha
+    else:
+        return repo.head.commit.hexsha
+
+
+
