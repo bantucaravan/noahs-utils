@@ -169,7 +169,6 @@ def list_file_hierarchy(startpath):
         for f in files:
             print('{}{}'.format(subindent, f))
 
-
 if False:
     # JSON selection
     # come back......
@@ -253,3 +252,50 @@ a =JSONQuery(json)
 a.select('collection_id').filter('name', '==', collection_name)
 
 '''
+
+def join_check(right, left):
+    '''
+    Check the overlap and join cardinality between two keys that are to be used for a join. 
+
+    Params:
+        right: (pd.Series)
+        left: (pd.Series) 
+
+    TODO:
+    * consider a looser criteria for cardinality where if there are duplicates on one side *even for
+    rows that do not have a match on the other side* that is declared cardinality of "many". Currently
+    there must be duplicates among rows on one side *that have a match on the other side* for a side 
+    to get a cardinality of "many".
+    * return value_counts() of total setdiffs left and right
+    '''
+    right_non_null, left_non_null = right.dropna(), left.dropna()
+    
+    right_matching_left_mask = right_non_null.isin(left_non_null)
+    #right_setdiff = np.setdiff1d(right_non_null, left_non_null) # slow, at lease for strings
+    right_setdiff = right_non_null.loc[~right_matching_left_mask].unique() # # remove .unique() to get total value count right not in left
+    is_many_right = right_non_null.loc[right_matching_left_mask].shape[0] != right_non_null.loc[right_matching_left_mask].unique().shape[0]
+    right_cardinality = 'Many' if is_many_right else 'One'
+    
+    print('Right row count:', right.shape[0]) 
+    print('Right non-null count:', right.notnull().sum()) 
+    print('Right unique non-null count:', right_non_null.unique().shape[0]) 
+    print('Right non-null rows matched to left:', right.isin(left).sum()) 
+    print('count of unique non-null right rows not in left:', right_setdiff.shape[0])
+    print('count of total non-null right rows not in left:', right.isin(right_setdiff).sum(),'\n')
+    
+    print('Intersection size:', np.intersect1d(right_non_null, left_non_null).shape[0],'\n')
+    
+    left_matching_right_mask = left_non_null.isin(right_non_null)
+    #left_setdiff = np.setdiff1d(left_non_null, right_non_null) # slow, at lease for strings
+    left_setdiff = left_non_null.loc[~left_matching_right_mask].unique() # # remove .unique() to get total value count left not in right
+    is_many_left = left_non_null.loc[left_matching_right_mask].shape[0] != left_non_null.loc[left_matching_right_mask].unique().shape[0]
+    left_cardinality = 'Many' if is_many_left else 'One'
+    
+    print('Left row count:', left.shape[0])
+    print('Left non-null rowcount:', left.notnull().sum())
+    print('Left unique non-null count:', left_non_null.unique().shape[0])
+    print('Left non-null rows matched to right:', left.isin(right).sum()) 
+    print('count of unique non-null left rows not in right:', left_setdiff.shape[0])
+    print('count of total non-null left rows not in right:', left.isin(left_setdiff).sum())
+    
+    print('\nJoin Cardinality:', f'{right_cardinality} to {left_cardinality}')
