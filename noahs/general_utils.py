@@ -299,3 +299,17 @@ def join_check(right, left):
     print('count of total non-null left rows not in right:', left.isin(left_setdiff).sum())
     
     print('\nJoin Cardinality:', f'{right_cardinality} to {left_cardinality}')
+
+
+def timefmtsecs(duration):
+    '''
+    convert duration in seconds (numeric type) to hr,min,sec str format.
+    Useful for timing code with time.time()
+    '''
+    hrs = int(duration // (60*60))
+    mins = int((duration % (60*60)) // 60)
+    secs = round(duration % 60,1)
+    _str = ''
+    if hrs>0: _str += f'{hrs} hrs '
+    if mins>0: _str += f'{mins} mins '
+    return _str + f'{secs} secs'
