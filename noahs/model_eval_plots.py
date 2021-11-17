@@ -12,7 +12,7 @@ import statsmodels.api as sm
 from noahs.plt_utils import offset_xlabels
 
 
-
+# NB: its hard to write unit tests for plots (I think)
 
 
 
@@ -82,3 +82,38 @@ def plot_roc_auc(ytrue, prob_pred):
     #plt.show()
 
     return plt.gca()
+
+
+
+
+
+def calibration_plot(true_preds, proba_preds, n_bins = 5, return_fig=False):
+    '''
+    plot calibration of predicted "probabilities" from ML models, 
+    e.g. does a .25 prediction from a random forest model really have a 25% 
+    chance of being an accurate prediction.
+
+    From version 1.0 sklearn has a function for this `CalibrationDisplay.from_predictions()` 
+    ( https://scikit-learn.org/stable/modules/generated/sklearn.calibration.CalibrationDisplay.html#sklearn.calibration.CalibrationDisplay.from_predictions )
+    however my version includes historgram of probabilities in the plot which is not included in the skelarn function.
+    '''
+
+    counts, edges = np.histogram(proba_preds, n_bins)
+    edges[-1] = edges[-1] + .0001 # account for the right most bin in np.digitize having an open (rather than closed) boundary and np.histogram returning bin edges with the right most bin having a closed boundary
+    bucket_ids = np.digitize(proba_preds, edges)
+    observed_probs = pd.Series(true_preds).groupby(bucket_ids).mean()
+    stated_probs = pd.Series(proba_preds).groupby(bucket_ids).mean()
+
+    fig, ax1 = plt.subplots()
+    ax1.plot(stated_probs, observed_probs, 'o-')
+    ax1.plot(np.linspace(0,1,10), np.linspace(0,1,10), '--')
+    ax1.set(ylabel='Observed Probabilility (calculated within bin)', xlabel='Stated Probability', title='Probability Calibration Plot \n (Positive Class)')
+    ax2 = ax1.twinx()
+    ax2.bar(edges[:-1], counts, width=edges[1:]-edges[:-1], align='edge', alpha = .3)
+    ax2.set(ylabel='Count of observations in bin')
+    plt.show()
+
+    if return_fig:
+        return fig
+
+
