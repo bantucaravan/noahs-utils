@@ -39,17 +39,42 @@ def plot_y_vs_all(y_var, data, exclude=[], ncols=5, title=None, **sns_kwargs):
 
 
 
-'''
+
 # (the beginnings of a) pretty correlation plot
 # use to see how correlated your features are. highly correlated features 
 # are usually bad, they make many feature importance/interpretation 
 # models  useless and they provide little addition information while 
 # providing the opportunity for overfitting to noise.
-corrmat = data.corr()
-k = 10 #number of variables for heatmap
-cols = corrmat.nlargest(k, 'recovered')['recovered'].index
-cm = np.corrcoef(data[cols].values.T)
-sns.set(font_scale=1.25)
-hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values, xticklabels=cols.values)
-plt.show()
-'''
+
+
+
+
+
+def corr_plot(corrmat):
+    # # return n rows where value in target column is highest
+    # k = 10 #number of variables for heatmap
+    # cols = corrmat.nlargest(k, target)[target]
+
+    if isinstance(corrmat, np.ndarray):
+        corrmat = pd.DataFrame(corrmat, columns=cols, values=cols) # !!! define cols!!!
+
+
+    # annotate tiles with coef value
+    annot_kwargs = {}
+    if annotate:
+        sns.set_theme(font_scale=1.25)
+        annot_kwargs = dict(annot=True, fmt='.2f', annot_kws={'size': 10})
+
+    # Generate a mask for the upper triangle
+    mask = np.triu(np.ones_like(corrmat, dtype=bool))
+    # Generate a custom diverging colormap
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+    # Draw the heatmap with the mask and correct aspect ratio
+    sns.heatmap(corrmat, mask=mask,  vmin=-1, vmax=1, center=0, cmap=cmap,
+                square=True, linewidths=.5, cbar_kws={"shrink": .5}, xticklabels=True,
+                yticklabels=True, **annot_kwargs, **col_lable_kwargs)
+    plt.tight_layout()
+
+    #plt.gcf().set_size_inches(17, 17)
+    #plt.show()
+
