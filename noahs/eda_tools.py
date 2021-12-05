@@ -50,14 +50,13 @@ def plot_y_vs_all(y_var, data, exclude=[], ncols=5, title=None, **sns_kwargs):
 
 
 
-def corr_plot(corrmat):
+def corr_plot(corrmat, annotate=True):
     # # return n rows where value in target column is highest
     # k = 10 #number of variables for heatmap
     # cols = corrmat.nlargest(k, target)[target]
 
     if isinstance(corrmat, np.ndarray):
         corrmat = pd.DataFrame(corrmat, columns=cols, values=cols) # !!! define cols!!!
-
 
     # annotate tiles with coef value
     annot_kwargs = {}
