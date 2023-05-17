@@ -11,6 +11,7 @@ sns.pairplot()
 #OR
 
 #for 1 col against all others (with single legend)
+Q#: can this handle categorical features?
 def plot_y_vs_all(y_var, data, exclude=[], ncols=5, title=None, **sns_kwargs):
     '''
     y_var:(str) col label of y variable, must exist in data
@@ -36,7 +37,9 @@ def plot_y_vs_all(y_var, data, exclude=[], ncols=5, title=None, **sns_kwargs):
     plt.show()
 
 
-
+# old
+def plot_y_vs_each_x():
+    pass
 
 
 
@@ -66,10 +69,8 @@ def corr_plot(corrmat, annotate=True):
 
     # Generate a mask for the upper triangle
     mask = np.triu(np.ones_like(corrmat, dtype=bool))
-    # Generate a custom diverging colormap
-    cmap = sns.diverging_palette(230, 20, as_cmap=True)
     # Draw the heatmap with the mask and correct aspect ratio
-    sns.heatmap(corrmat, mask=mask,  vmin=-1, vmax=1, center=0, cmap=cmap,
+    sns.heatmap(corrmat, mask=mask,  vmin=-1, vmax=1, center=0, cmap='RdBu_r',
                 square=True, linewidths=.5, cbar_kws={"shrink": .5}, xticklabels=True,
                 yticklabels=True, **annot_kwargs, **col_lable_kwargs)
     plt.tight_layout()
