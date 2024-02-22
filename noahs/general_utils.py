@@ -15,6 +15,8 @@ from sklearn.model_selection import KFold
 import inspect
 import json
 import os
+import sys
+from pathlib import Path
 import re
 import warnings
 import pickle
@@ -272,30 +274,36 @@ def join_check(right, left):
     
     right_matching_left_mask = right_non_null.isin(left_non_null)
     #right_setdiff = np.setdiff1d(right_non_null, left_non_null) # slow, at lease for strings
-    right_setdiff = right_non_null.loc[~right_matching_left_mask].unique() # # remove .unique() to get total value count right not in left
-    is_many_right = right_non_null.loc[right_matching_left_mask].shape[0] != right_non_null.loc[right_matching_left_mask].unique().shape[0]
+    # right_setdiff = right_non_null.loc[~right_matching_left_mask].unique() # remove .unique() to get total value count right not in left
+    right_setdiff = set(right_non_null) - set(left_non_null) # Q: is this really the same as above and faster?
+    # is_many_right = right_non_null.loc[right_matching_left_mask].shape[0] != right_non_null.loc[right_matching_left_mask].unique().shape[0]
+    is_many_right = len(right_setdiff) != right_non_null.isin(right_setdiff).sum() # Q: is this really the same as above and faster?
     right_cardinality = 'Many' if is_many_right else 'One'
     
     print('Right row count:', right.shape[0]) 
     print('Right non-null count:', right.notnull().sum()) 
     print('Right unique non-null count:', right_non_null.unique().shape[0]) 
     print('Right non-null rows matched to left:', right.isin(left).sum()) 
-    print('count of unique non-null right rows not in left:', right_setdiff.shape[0])
+    print('count of unique non-null right rows not in left:', len(right_setdiff))
     print('count of total non-null right rows not in left:', right.isin(right_setdiff).sum(),'\n')
     
     print('Intersection size:', np.intersect1d(right_non_null, left_non_null).shape[0],'\n')
     
     left_matching_right_mask = left_non_null.isin(right_non_null)
     #left_setdiff = np.setdiff1d(left_non_null, right_non_null) # slow, at lease for strings
-    left_setdiff = left_non_null.loc[~left_matching_right_mask].unique() # # remove .unique() to get total value count left not in right
-    is_many_left = left_non_null.loc[left_matching_right_mask].shape[0] != left_non_null.loc[left_matching_right_mask].unique().shape[0]
+    # left_setdiff = left_non_null.loc[~left_matching_right_mask].unique() # # remove .unique() to get total value count left not in right
+    # is_many_left = left_non_null.loc[left_matching_right_mask].shape[0] != left_non_null.loc[left_matching_right_mask].unique().shape[0]
+    # Q: is below really the same as above and faster?
+    left_setdiff = set(left_non_null) - set(right_non_null) 
+    is_many_left = len(left_setdiff) != left_non_null.isin(left_setdiff).sum()
+    
     left_cardinality = 'Many' if is_many_left else 'One'
     
     print('Left row count:', left.shape[0])
     print('Left non-null rowcount:', left.notnull().sum())
     print('Left unique non-null count:', left_non_null.unique().shape[0])
     print('Left non-null rows matched to right:', left.isin(right).sum()) 
-    print('count of unique non-null left rows not in right:', left_setdiff.shape[0])
+    print('count of unique non-null left rows not in right:', len(left_setdiff))
     print('count of total non-null left rows not in right:', left.isin(left_setdiff).sum())
     
     print('\nJoin Cardinality:', f'{right_cardinality} to {left_cardinality}')
@@ -313,3 +321,16 @@ def timefmtsecs(duration):
     if hrs>0: _str += f'{hrs} hrs '
     if mins>0: _str += f'{mins} mins '
     return _str + f'{secs} secs'
+
+
+def find_proj_root(sentinel='.git'):
+    '''
+    Find top level of project. Useful to set common relative 
+    paths or entrypoint across project or on different machines 
+    e.g. setting pythonpath for local libs.
+    '''
+    cwd = os.getcwd()
+    # cwd = _dh[0]
+    while not [i for i in Path(cwd).iterdir() if i.name == sentinel]:       
+        cwd = Path(cwd).parent
+    return cwd

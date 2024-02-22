@@ -11,7 +11,7 @@ sns.pairplot()
 #OR
 
 #for 1 col against all others (with single legend)
-Q#: can this handle categorical features?
+#: can this handle categorical features?
 def plot_y_vs_all(y_var, data, exclude=[], ncols=5, title=None, **sns_kwargs):
     '''
     y_var:(str) col label of y variable, must exist in data
@@ -57,11 +57,18 @@ def corr_plot(corrmat, annotate=True):
     # # return n rows where value in target column is highest
     # k = 10 #number of variables for heatmap
     # cols = corrmat.nlargest(k, target)[target]
+    '''
+    Simple ALT:
+    import plotly.express as px
+    fig = px.imshow(df.corr(), text_auto='.2f')
+    #fig.update_layout(height=900) # if fig size needs to be increased
+    fig.show()
+    '''
 
     if isinstance(corrmat, np.ndarray):
         corrmat = pd.DataFrame(corrmat, columns=cols, values=cols) # !!! define cols!!!
 
-    # annotate tiles with coef value
+    # annotate tiles with corr value
     annot_kwargs = {}
     if annotate:
         sns.set_theme(font_scale=1.25)
@@ -70,11 +77,14 @@ def corr_plot(corrmat, annotate=True):
     # Generate a mask for the upper triangle
     mask = np.triu(np.ones_like(corrmat, dtype=bool))
     # Draw the heatmap with the mask and correct aspect ratio
-    sns.heatmap(corrmat, mask=mask,  vmin=-1, vmax=1, center=0, cmap='RdBu_r',
-                square=True, linewidths=.5, cbar_kws={"shrink": .5}, xticklabels=True,
+    sns.heatmap(corrmat, mask=mask,  
+                vmin=-1, vmax=1, # so color bar shows full possible range even if non-have that range
+                center=0, cmap='RdBu_r',
+                cbar_kws={"shrink": .5},
+                square=True, linewidths=.5, xticklabels=True,
                 yticklabels=True, **annot_kwargs, **col_lable_kwargs)
     plt.tight_layout()
 
     #plt.gcf().set_size_inches(17, 17)
-    #plt.show()
+    plt.show()
 
